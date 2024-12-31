@@ -41,7 +41,7 @@ func main() {
 	}
 
 	// Create authenticator
-	charSource := authentication.NewFileSource(config.CharacterDirPath, "passwd")
+	charSource := authentication.NewFileSource(config.CharacterDirPath)
 	authenticator, err := authentication.NewAuthenticator(charSource, nil, time.Duration(config.CharacterCacheTime)*time.Second)
 	if err != nil {
 		log.Fatalf("Failed to create authenticator: %v", err)

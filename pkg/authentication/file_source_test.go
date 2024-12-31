@@ -30,7 +30,7 @@ password "testpass123"
 		t.Fatalf("failed to write test character file: %v", err)
 	}
 
-	source := NewFileSource(tempDir, "password")
+	source := NewFileSource(tempDir)
 
 	t.Run("Load existing character", func(t *testing.T) {
 		char, err := source.LoadCharacter("drake")
@@ -71,32 +71,6 @@ password "testpass123"
 		_, err := source.LoadCharacter("")
 		if err == nil {
 			t.Error("expected error with empty username")
-		}
-	})
-
-	t.Run("Custom password field", func(t *testing.T) {
-		// Create a character file with a different password field
-		customData := []byte(`name "custom"
-cap_name "Custom"
-pwd "custompass"
-`)
-		customDir := filepath.Join(tempDir, "c")
-		if err := os.Mkdir(customDir, 0755); err != nil {
-			t.Fatalf("failed to create custom dir: %v", err)
-		}
-
-		if err := os.WriteFile(filepath.Join(customDir, "custom.o"), customData, 0644); err != nil {
-			t.Fatalf("failed to write custom character file: %v", err)
-		}
-
-		customSource := NewFileSource(tempDir, "pwd")
-		char, err := customSource.LoadCharacter("custom")
-		if err != nil {
-			t.Fatalf("failed to load character with custom password field: %v", err)
-		}
-
-		if char.PasswordHash != "custompass" {
-			t.Errorf("expected password hash 'custompass', got %q", char.PasswordHash)
 		}
 	})
 }

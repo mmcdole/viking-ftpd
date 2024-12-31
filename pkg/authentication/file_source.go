@@ -9,24 +9,21 @@ import (
 	"github.com/mmcdole/viking-ftpd/pkg/lpc"
 )
 
+const (
+	// PasswordField is the field name in LPC object files that contains the password hash
+	PasswordField = "password"
+)
+
 // FileSource loads character data from LPC object files
 type FileSource struct {
 	// CharacterDir is the path to the directory containing character subdirectories
 	CharacterDir string
-
-	// PasswordField specifies the field name in the LPC object that contains the password hash
-	// If empty, defaults to "password"
-	PasswordField string
 }
 
 // NewFileSource creates a new FileSource
-func NewFileSource(characterDir string, passwordField string) *FileSource {
-	if passwordField == "" {
-		passwordField = "password"
-	}
+func NewFileSource(characterDir string) *FileSource {
 	return &FileSource{
-		CharacterDir:  characterDir,
-		PasswordField: passwordField,
+		CharacterDir: characterDir,
 	}
 }
 
@@ -64,7 +61,7 @@ func (s *FileSource) LoadCharacter(username string) (*CharacterFile, error) {
 	}
 
 	// Extract password hash
-	passwordHash, ok := rawObj[s.PasswordField].(string)
+	passwordHash, ok := rawObj[PasswordField].(string)
 	if !ok {
 		return nil, ErrInvalidHash
 	}
