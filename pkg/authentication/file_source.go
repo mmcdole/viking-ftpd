@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/mmcdole/vkftpd/pkg/lpc"
+	"github.com/mmcdole/viking-ftpd/pkg/lpc"
 )
 
 // FileSource loads character data from LPC object files

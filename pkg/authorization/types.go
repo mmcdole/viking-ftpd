@@ -14,6 +14,21 @@ const (
 	GrantGrant Permission = 5
 )
 
+// CanRead returns true if the permission allows reading
+func (p Permission) CanRead() bool {
+	return p >= Read
+}
+
+// CanWrite returns true if the permission allows writing
+func (p Permission) CanWrite() bool {
+	return p >= Write
+}
+
+// CanGrant returns true if the permission allows granting permissions
+func (p Permission) CanGrant() bool {
+	return p >= GrantGrant
+}
+
 // AccessNode represents a node in the access tree
 type AccessNode struct {
 	// Direct access level for this node

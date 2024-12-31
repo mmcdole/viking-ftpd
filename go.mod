@@ -1,14 +1,15 @@
-module github.com/mmcdole/vkftpd
+module github.com/mmcdole/viking-ftpd
 
 go 1.22
 
-toolchain go1.23.0
+require (
+	github.com/digitive/crypt v0.2.0
+	github.com/fclairamb/ftpserverlib v0.21.0
+)
 
 require (
-	github.com/amoghe/go-crypt v0.0.0-20220222110647-20eada5f5964 // indirect
-	github.com/digitive/crypt v0.2.0 // indirect
-	github.com/go-crypt/crypt v0.3.2 // indirect
-	github.com/go-crypt/x v0.3.2 // indirect
-	github.com/tredoe/osutil v1.5.0 // indirect
+	github.com/fclairamb/go-log v0.5.0 // indirect
+	github.com/spf13/afero v1.11.0 // indirect
 	golang.org/x/sys v0.28.0 // indirect
+	golang.org/x/text v0.14.0 // indirect
 )

@@ -6,8 +6,9 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/mmcdole/vkftpd/pkg/authentication"
-	"github.com/mmcdole/vkftpd/pkg/authorization"
+	"github.com/mmcdole/viking-ftpd/pkg/authentication"
+	"github.com/mmcdole/viking-ftpd/pkg/authorization"
+	"github.com/mmcdole/viking-ftpd/pkg/ftpserver"
 )
 
 func main() {
@@ -46,8 +47,19 @@ func main() {
 		log.Fatalf("Failed to create authenticator: %v", err)
 	}
 
-	// TODO: Initialize and start FTP server
+	// Create and start FTP server
+	server, err := ftpserver.New(&ftpserver.Config{
+		ListenAddr:           config.ListenAddr,
+		Port:                config.Port,
+		RootDir:             config.FTPRootDir,
+		PassiveTransferPorts: config.PassivePortRange,
+	}, authorizer, authenticator)
+	if err != nil {
+		log.Fatalf("Failed to create FTP server: %v", err)
+	}
+
 	log.Printf("Starting FTP server on %s:%d", config.ListenAddr, config.Port)
-	_ = authenticator
-	_ = authorizer
+	if err := server.ListenAndServe(); err != nil {
+		log.Fatalf("Error starting server: %v", err)
+	}
 }
