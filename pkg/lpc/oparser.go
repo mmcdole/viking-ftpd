@@ -65,7 +65,20 @@ func (p *ObjectParser) parseValue() (interface{}, error) {
 	r := p.peek(0)
 	if r == '"' {
 		return p.parseString()
-	} else if unicode.IsDigit(r) {
+	} else if unicode.IsDigit(r) || r == '-' || r == '.' {
+		// Look ahead to see if this is a float
+		start := p.pos
+		isFloat := false
+		for unicode.IsDigit(p.peek(0)) || p.peek(0) == '.' {
+			if p.peek(0) == '.' {
+				isFloat = true
+			}
+			p.next()
+		}
+		p.pos = start
+		if isFloat {
+			return p.parseFloat()
+		}
 		return p.parseInt()
 	} else if r == '(' {
 		if p.peek(1) == '{' {
@@ -125,6 +138,7 @@ func (p *ObjectParser) parseMapEntryList(entryCount int) (map[string]interface{}
 			return nil, fmt.Errorf("error in map entry at position %d: %w", p.pos, err)
 		}
 		entries[key] = value
+		p.expect(',') // Allow trailing comma
 	}
 	return entries, nil
 }
@@ -134,17 +148,16 @@ func (p *ObjectParser) parseMapEntry() (string, interface{}, error) {
 	if err != nil {
 		return "", nil, fmt.Errorf("error in map entry: invalid key at position %d", p.pos)
 	}
+	p.skipSpaces()
 	if !p.expect(':') {
-		return "", nil, fmt.Errorf("error in map entry: expected ':' after key at position %d", p.pos)
+		return "", nil, fmt.Errorf("error in map entry: expected ':' at position %d", p.pos)
 	}
 	p.skipSpaces()
 	value, err := p.parseValue()
 	if err != nil {
 		return "", nil, fmt.Errorf("error in map entry: invalid value at position %d", p.pos)
 	}
-	if !p.expect(',') {
-		return "", nil, fmt.Errorf("error in map entry: expected ',' after value at position %d", p.pos)
-	}
+	p.skipSpaces()
 	return key, value, nil
 }
 
@@ -152,14 +165,25 @@ func (p *ObjectParser) parseList() ([]interface{}, error) {
 	if !p.expect('(') || !p.expect('{') {
 		return nil, fmt.Errorf("error in list: expected '({' at position %d", p.pos)
 	}
+	p.skipSpaces()
+	size, err := p.parseInt()
+	if err != nil {
+		return nil, fmt.Errorf("error in list: invalid size at position %d", p.pos)
+	}
+	if !p.expect('|') {
+		return nil, fmt.Errorf("error in list: expected '|' at position %d", p.pos)
+	}
 	var list []interface{}
-	for !p.expect('}') {
+	for i := 0; i < size; i++ {
 		value, err := p.parseValue()
 		if err != nil {
 			return nil, fmt.Errorf("error in list: invalid value at position %d", p.pos)
 		}
 		list = append(list, value)
-		p.expect(',')
+		p.expect(',') // Allow trailing comma
+	}
+	if !p.expect('}') {
+		return nil, fmt.Errorf("error in list: expected '}' at position %d", p.pos)
 	}
 	if !p.expect(')') {
 		return nil, fmt.Errorf("error in list: expected ')' at position %d", p.pos)
@@ -187,6 +211,9 @@ func (p *ObjectParser) parseString() (string, error) {
 
 func (p *ObjectParser) parseInt() (int, error) {
 	start := p.pos
+	if p.peek(0) == '-' {
+		p.next()
+	}
 	for unicode.IsDigit(p.peek(0)) {
 		p.next()
 	}
@@ -194,6 +221,18 @@ func (p *ObjectParser) parseInt() (int, error) {
 	result, err := strconv.Atoi(p.s[start:p.pos])
 	if err != nil {
 		return 0, fmt.Errorf("error in integer: invalid number at position %d", p.pos)
+	}
+	return result, nil
+}
+
+func (p *ObjectParser) parseFloat() (float64, error) {
+	start := p.pos
+	for unicode.IsDigit(p.peek(0)) || p.peek(0) == '.' {
+		p.next()
+	}
+	result, err := strconv.ParseFloat(p.s[start:p.pos], 64)
+	if err != nil {
+		return 0, fmt.Errorf("error in float: invalid number at position %d", p.pos)
 	}
 	return result, nil
 }
@@ -233,18 +272,3 @@ func (p *ObjectParser) skipSpaces() {
 		p.next()
 	}
 }
-
-/* func main() {
-	input :=
-		`name "Drake"
-Str 10
-access_map ([1|"drake":([1|"area":([1|"lockers":1,]),]),])`
-
-	p := NewParser(input)
-	obj, err := p.ParseObject()
-	if err != nil {
-		fmt.Printf("Failed to parse the input: %v\n", err)
-	} else {
-		fmt.Printf("Parsed object: %+v\n", obj)
-	}
-} */
