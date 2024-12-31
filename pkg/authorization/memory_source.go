@@ -1,4 +1,4 @@
-package authz
+package authorization
 
 // MemorySource provides access data from an in-memory map
 type MemorySource struct {

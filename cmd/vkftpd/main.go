@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/mmcdole/vkftpd/pkg/authn"
-	"github.com/mmcdole/vkftpd/pkg/authz"
+	"github.com/mmcdole/vkftpd/pkg/authentication"
+	"github.com/mmcdole/vkftpd/pkg/authorization"
 )
 
 func main() {
@@ -33,15 +33,15 @@ func main() {
 	}
 
 	// Create authorizer for permission checks
-	source := authz.NewFileSource(config.AccessFilePath)
-	authorizer, err := authz.NewAuthorizer(source, time.Duration(config.AccessCacheTime)*time.Second)
+	source := authorization.NewFileSource(config.AccessFilePath)
+	authorizer, err := authorization.NewAuthorizer(source, time.Duration(config.AccessCacheTime)*time.Second)
 	if err != nil {
 		log.Fatalf("Failed to create authorizer: %v", err)
 	}
 
 	// Create authenticator
-	charSource := authn.NewFileSource(config.CharacterDirPath, "passwd")
-	authenticator, err := authn.NewAuthenticator(charSource, nil, time.Duration(config.CharacterCacheTime)*time.Second)
+	charSource := authentication.NewFileSource(config.CharacterDirPath, "passwd")
+	authenticator, err := authentication.NewAuthenticator(charSource, nil, time.Duration(config.CharacterCacheTime)*time.Second)
 	if err != nil {
 		log.Fatalf("Failed to create authenticator: %v", err)
 	}

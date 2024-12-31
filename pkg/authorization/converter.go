@@ -1,4 +1,4 @@
-package authz
+package authorization
 
 import "fmt"
 
@@ -86,8 +86,8 @@ func convertToAccessNode(data map[string]interface{}) (*AccessNode, []string, er
 				// When a node has a direct permission value, it applies to both the node itself
 				// and all nodes below it
 				child := &AccessNode{
-					DotAccess:  perm,  // Permission for the node itself
-					StarAccess: perm,  // Default permission for children
+					DotAccess:  perm, // Permission for the node itself
+					StarAccess: perm, // Default permission for children
 					Children:   make(map[string]*AccessNode),
 				}
 				node.Children[key] = child

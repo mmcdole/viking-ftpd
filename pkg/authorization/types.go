@@ -1,4 +1,4 @@
-package authz
+package authorization
 
 import "time"
 
@@ -6,28 +6,28 @@ import "time"
 type Permission int
 
 const (
-	Revoked     Permission = -1
-	Read        Permission = 1
-	GrantRead   Permission = 2
-	Write       Permission = 3
-	GrantWrite  Permission = 4
-	GrantGrant  Permission = 5
+	Revoked    Permission = -1
+	Read       Permission = 1
+	GrantRead  Permission = 2
+	Write      Permission = 3
+	GrantWrite Permission = 4
+	GrantGrant Permission = 5
 )
 
 // AccessNode represents a node in the access tree
 type AccessNode struct {
 	// Direct access level for this node
-	DotAccess   Permission
+	DotAccess Permission
 	// Default access level for children
-	StarAccess  Permission
+	StarAccess Permission
 	// Named child nodes
-	Children    map[string]*AccessNode
+	Children map[string]*AccessNode
 }
 
 // AccessTree represents the complete access hierarchy
 type AccessTree struct {
 	// Root node of the tree
-	Root   *AccessNode
+	Root *AccessNode
 	// Groups this user belongs to (if this is a user tree)
 	Groups []string
 }

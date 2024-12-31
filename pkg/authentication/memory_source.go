@@ -1,4 +1,4 @@
-package authn
+package authentication
 
 // MemorySource provides character data from an in-memory map
 type MemorySource struct {
