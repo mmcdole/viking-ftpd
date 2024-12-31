@@ -35,20 +35,9 @@ type HashComparer interface {
 	VerifyPassword(hashedPassword, password string) error
 }
 
-// Authenticator handles user authentication
-type Authenticator interface {
-	// Authenticate checks if the provided credentials are valid
-	// Returns nil if authentication succeeds, error otherwise
-	Authenticate(username, password string) error
-
-	// UserExists checks if a user exists and returns any error encountered
-	UserExists(username string) (bool, error)
-}
-
 // AuthenticatorConfig holds configuration for creating a new Authenticator
 type AuthenticatorConfig struct {
 	Source        CharacterSource
 	HashComparer  HashComparer
 	CacheDuration time.Duration
-	PasswordField string
 }

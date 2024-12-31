@@ -12,8 +12,8 @@ type cachedCharacter struct {
 	loadedAt  time.Time
 }
 
-// authenticator implements the Authenticator interface
-type authenticator struct {
+// Authenticator handles user authentication with caching
+type Authenticator struct {
 	source   CharacterSource
 	comparer HashComparer
 	cacheDuration time.Duration
@@ -23,7 +23,7 @@ type authenticator struct {
 }
 
 // NewAuthenticator creates a new authenticator
-func NewAuthenticator(source CharacterSource, comparer HashComparer, cacheDuration time.Duration) (Authenticator, error) {
+func NewAuthenticator(source CharacterSource, comparer HashComparer, cacheDuration time.Duration) (*Authenticator, error) {
 	if source == nil {
 		return nil, fmt.Errorf("character source is required")
 	}
@@ -31,7 +31,7 @@ func NewAuthenticator(source CharacterSource, comparer HashComparer, cacheDurati
 		comparer = NewUnixCrypt()
 	}
 
-	return &authenticator{
+	return &Authenticator{
 		source:   source,
 		comparer: comparer,
 		cacheDuration: cacheDuration,
@@ -40,7 +40,7 @@ func NewAuthenticator(source CharacterSource, comparer HashComparer, cacheDurati
 }
 
 // loadCharacter loads a character, using cache if available
-func (a *authenticator) loadCharacter(username string) (*CharacterFile, error) {
+func (a *Authenticator) loadCharacter(username string) (*CharacterFile, error) {
 	a.mu.RLock()
 	cached, exists := a.cache[username]
 	a.mu.RUnlock()
@@ -67,8 +67,8 @@ func (a *authenticator) loadCharacter(username string) (*CharacterFile, error) {
 	return file, nil
 }
 
-// Authenticate implements Authenticator
-func (a *authenticator) Authenticate(username, password string) error {
+// Authenticate checks if the provided credentials are valid
+func (a *Authenticator) Authenticate(username, password string) error {
 	char, err := a.loadCharacter(username)
 	if err != nil {
 		return fmt.Errorf("loading character: %w", err)
@@ -77,8 +77,8 @@ func (a *authenticator) Authenticate(username, password string) error {
 	return a.comparer.VerifyPassword(char.PasswordHash, password)
 }
 
-// UserExists implements Authenticator
-func (a *authenticator) UserExists(username string) (bool, error) {
+// UserExists checks if a user exists and returns any error encountered
+func (a *Authenticator) UserExists(username string) (bool, error) {
 	_, err := a.loadCharacter(username)
 	if err == ErrUserNotFound {
 		return false, nil
@@ -89,8 +89,8 @@ func (a *authenticator) UserExists(username string) (bool, error) {
 	return true, nil
 }
 
-// RefreshUser implements Authenticator
-func (a *authenticator) RefreshUser(username string) error {
+// RefreshUser forces a refresh of the user's cached data
+func (a *Authenticator) RefreshUser(username string) error {
 	a.mu.Lock()
 	delete(a.cache, username)
 	a.mu.Unlock()

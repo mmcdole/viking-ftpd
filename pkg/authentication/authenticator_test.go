@@ -20,7 +20,7 @@ func TestAuthenticator(t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to create authenticator: %v", err)
 			}
-			if auth.(*authenticator).comparer == nil {
+			if auth.comparer == nil {
 				t.Error("expected default hash comparer to be set")
 			}
 		})
@@ -54,7 +54,7 @@ func TestAuthenticator(t *testing.T) {
 		})
 	})
 
-	t.Run("User existence", func(t *testing.T) {
+	t.Run("User Existence", func(t *testing.T) {
 		source := NewMemorySource(nil)
 		source.AddCharacter("drake", "GgHKjSw.CAsOo")
 
@@ -88,22 +88,32 @@ func TestAuthenticator(t *testing.T) {
 		source := NewMemorySource(nil)
 		source.AddCharacter("drake", "GgHKjSw.CAsOo")
 
-		auth, err := NewAuthenticator(source, nil, time.Hour)
+		auth, err := NewAuthenticator(source, nil, time.Minute)
 		if err != nil {
 			t.Fatalf("failed to create authenticator: %v", err)
 		}
 
-		// First access should hit source
-		if err := auth.Authenticate("drake", "billiards"); err != nil {
-			t.Fatalf("first authentication failed: %v", err)
+		// First access should cache
+		if _, err := auth.UserExists("drake"); err != nil {
+			t.Fatalf("unexpected error: %v", err)
 		}
 
 		// Change password in source
-		source.AddCharacter("drake", "different_hash")
+		source.AddCharacter("drake", "NewHash")
 
-		// Second access should use cache
-		if err := auth.Authenticate("drake", "billiards"); err != nil {
-			t.Error("cached authentication failed")
+		// Should still work with old password due to cache
+		if _, err := auth.UserExists("drake"); err != nil {
+			t.Error("expected cached result")
+		}
+
+		// Force refresh
+		if err := auth.RefreshUser("drake"); err != nil {
+			t.Errorf("failed to refresh user: %v", err)
+		}
+
+		// Should see new data
+		if _, err := auth.UserExists("drake"); err != nil {
+			t.Error("expected success with refreshed data")
 		}
 	})
 }

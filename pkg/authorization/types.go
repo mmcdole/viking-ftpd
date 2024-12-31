@@ -38,25 +38,6 @@ type AccessSource interface {
 	LoadRawData() (map[string]interface{}, error)
 }
 
-// Authorizer handles access control and permissions
-type Authorizer interface {
-	// HasPermission checks if a user has the required permission for a path
-	HasPermission(username string, path string, requiredPerm Permission) bool
-
-	// GetEffectivePermission returns the effective permission a user has on a path
-	GetEffectivePermission(username string, path string) Permission
-
-	// GetUserGroups returns the list of groups a user belongs to
-	GetUserGroups(username string) []string
-}
-
-// CachingAuthorizer extends the base Authorizer interface with cache management
-type CachingAuthorizer interface {
-	Authorizer
-	// RefreshCache forces a reload of the access tree from the source
-	RefreshCache() error
-}
-
 // AuthorizerConfig holds the configuration for creating a new Authorizer
 type AuthorizerConfig struct {
 	// Source provides the access tree data

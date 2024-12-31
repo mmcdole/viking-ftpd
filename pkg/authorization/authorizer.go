@@ -8,8 +8,8 @@ import (
 	"time"
 )
 
-// authorizer implements the Authorizer interface
-type authorizer struct {
+// Authorizer handles access control and permissions with caching
+type Authorizer struct {
 	source        AccessSource
 	cacheDuration time.Duration
 
@@ -19,8 +19,8 @@ type authorizer struct {
 }
 
 // NewAuthorizer creates a new Authorizer instance
-func NewAuthorizer(source AccessSource, cacheDuration time.Duration) (Authorizer, error) {
-	a := &authorizer{
+func NewAuthorizer(source AccessSource, cacheDuration time.Duration) (*Authorizer, error) {
+	a := &Authorizer{
 		source:        source,
 		cacheDuration: cacheDuration,
 		trees:         make(map[string]*AccessTree),
@@ -35,7 +35,7 @@ func NewAuthorizer(source AccessSource, cacheDuration time.Duration) (Authorizer
 }
 
 // refreshCache loads fresh data from the source
-func (a *authorizer) refreshCache() error {
+func (a *Authorizer) refreshCache() error {
 	rawData, err := a.source.LoadRawData()
 	if err != nil {
 		return fmt.Errorf("loading raw data: %w", err)
@@ -55,7 +55,7 @@ func (a *authorizer) refreshCache() error {
 }
 
 // ensureFreshCache checks if cache needs refresh
-func (a *authorizer) ensureFreshCache() error {
+func (a *Authorizer) ensureFreshCache() error {
 	a.mu.RLock()
 	needsRefresh := time.Since(a.lastRefresh) >= a.cacheDuration
 	a.mu.RUnlock()
@@ -67,7 +67,7 @@ func (a *authorizer) ensureFreshCache() error {
 }
 
 // HasPermission implements Authorizer
-func (a *authorizer) HasPermission(username string, filepath string, requiredPerm Permission) bool {
+func (a *Authorizer) HasPermission(username string, filepath string, requiredPerm Permission) bool {
 	if err := a.ensureFreshCache(); err != nil {
 		return false
 	}
@@ -75,7 +75,7 @@ func (a *authorizer) HasPermission(username string, filepath string, requiredPer
 }
 
 // GetEffectivePermission implements Authorizer
-func (a *authorizer) GetEffectivePermission(username string, filepath string) Permission {
+func (a *Authorizer) GetEffectivePermission(username string, filepath string) Permission {
 	if err := a.ensureFreshCache(); err != nil {
 		return Revoked
 	}
@@ -134,7 +134,7 @@ func (a *authorizer) GetEffectivePermission(username string, filepath string) Pe
 }
 
 // GetUserGroups implements Authorizer
-func (a *authorizer) GetUserGroups(username string) []string {
+func (a *Authorizer) GetUserGroups(username string) []string {
 	if err := a.ensureFreshCache(); err != nil {
 		return nil
 	}
@@ -153,7 +153,7 @@ func (a *authorizer) GetUserGroups(username string) []string {
 }
 
 // checkNodePermission recursively checks permissions in a node
-func (a *authorizer) checkNodePermission(node *AccessNode, pathParts []string) Permission {
+func (a *Authorizer) checkNodePermission(node *AccessNode, pathParts []string) Permission {
 	if node == nil {
 		fmt.Printf("checkNodePermission: node is nil\n")
 		return Revoked
@@ -194,7 +194,7 @@ func (a *authorizer) checkNodePermission(node *AccessNode, pathParts []string) P
 }
 
 // checkTreePermission checks a single tree for permissions on a path
-func (a *authorizer) checkTreePermission(node *AccessNode, filepath string) Permission {
+func (a *Authorizer) checkTreePermission(node *AccessNode, filepath string) Permission {
 	// Clean the path and split into parts
 	parts := strings.Split(path.Clean(filepath), "/")
 	if len(parts) > 0 && parts[0] == "" {

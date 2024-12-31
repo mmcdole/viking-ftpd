@@ -71,20 +71,9 @@ func testData() map[string]interface{} {
 }
 
 func TestAuthorizer(t *testing.T) {
-	source := &mockSource{
-		data: testData(),
-	}
-
-	auth, err := NewAuthorizer(source, time.Hour)
+	auth, err := NewAuthorizer(&mockSource{data: testData()}, time.Hour)
 	if err != nil {
-		t.Fatalf("creating authorizer: %v", err)
-	}
-
-	// Add debug logging for the default tree
-	if tree, ok := auth.(*authorizer).trees["*"]; ok {
-		t.Logf("Default tree root: DotAccess=%v, StarAccess=%v", tree.Root.DotAccess, tree.Root.StarAccess)
-	} else {
-		t.Log("No default tree found")
+		t.Fatalf("Failed to create authorizer: %v", err)
 	}
 
 	t.Run("DefaultPermissions", func(t *testing.T) {
@@ -95,49 +84,49 @@ func TestAuthorizer(t *testing.T) {
 			perm     Permission
 		}{
 			{
-				name:     "read on root",
+				name:     "read_on_root",
 				username: "tundra",
 				path:     "/",
 				perm:     Read,
 			},
 			{
-				name:     "read on characters directory",
+				name:     "read_on_characters_directory",
 				username: "tundra",
 				path:     "/characters",
 				perm:     Read,
 			},
 			{
-				name:     "cannot access data dir",
+				name:     "cannot_access_data_dir",
 				username: "tundra",
 				path:     "/data/notes",
 				perm:     Revoked,
 			},
 			{
-				name:     "can write to logs",
+				name:     "can_write_to_logs",
 				username: "tundra",
 				path:     "/log/driver",
 				perm:     Write,
 			},
 			{
-				name:     "can list players directory",
+				name:     "can_list_players_directory",
 				username: "tundra",
 				path:     "/players",
 				perm:     Read,
 			},
 			{
-				name:     "cannot access random player dir",
+				name:     "cannot_access_random_player_dir",
 				username: "tundra",
 				path:     "/players/dios/workroom.c",
 				perm:     Revoked,
 			},
 			{
-				name:     "can read open directories",
+				name:     "can_read_open_directories",
 				username: "tundra",
 				path:     "/players/random/open/file.txt",
 				perm:     Read,
 			},
 		}
-		runEffectivePermissionTests(t, auth, cases)
+		runPermTests(t, auth, cases)
 	})
 
 	t.Run("ImplicitPlayerPermissions", func(t *testing.T) {
@@ -148,31 +137,31 @@ func TestAuthorizer(t *testing.T) {
 			perm     Permission
 		}{
 			{
-				name:     "has grant_grant on own directory",
+				name:     "has_grant_grant_on_own_directory",
 				username: "mousepad",
 				path:     "/players/mousepad",
 				perm:     GrantGrant,
 			},
 			{
-				name:     "has grant_grant on own files",
+				name:     "has_grant_grant_on_own_files",
 				username: "mousepad",
 				path:     "/players/mousepad/test.txt",
 				perm:     GrantGrant,
 			},
 			{
-				name:     "cannot access other player directory",
+				name:     "cannot_access_other_player_directory",
 				username: "mousepad",
 				path:     "/players/frogo/workroom.c",
 				perm:     Revoked,
 			},
 			{
-				name:     "can read open directories",
+				name:     "can_read_open_directories",
 				username: "mousepad",
 				path:     "/players/frogo/open/file.txt",
 				perm:     Read,
 			},
 		}
-		runEffectivePermissionTests(t, auth, cases)
+		runPermTests(t, auth, cases)
 	})
 
 	t.Run("ArchFullPermissions", func(t *testing.T) {
@@ -183,28 +172,29 @@ func TestAuthorizer(t *testing.T) {
 			perm     Permission
 		}{
 			{
-				name:     "has grant_grant on own directory",
+				name:     "has_grant_grant_on_own_directory",
 				username: "knubo",
 				path:     "/players/knubo",
 				perm:     GrantGrant,
 			},
 			{
-				name:     "can grant read on other player dirs",
+				name:     "can_grant_read_on_other_player_dirs",
 				username: "knubo",
 				path:     "/players/mousepad/workroom.c",
 				perm:     GrantRead,
 			},
 			{
-				name:     "can write to logs",
+				name:     "can_write_to_logs",
 				username: "knubo",
 				path:     "/log/driver",
 				perm:     Write,
 			},
 		}
-		runEffectivePermissionTests(t, auth, cases)
+		runPermTests(t, auth, cases)
 	})
 
 	t.Run("ArchDocsPermissions", func(t *testing.T) {
+		// Create a new authorizer with specific test data for this case
 		auth, err := NewAuthorizer(&mockSource{data: map[string]interface{}{
 			"tundra": map[string]interface{}{
 				"?": []interface{}{"Arch_docs"},
@@ -214,9 +204,9 @@ func TestAuthorizer(t *testing.T) {
 					"*": GrantWrite,
 				},
 			},
-		}}, time.Minute)
+		}}, time.Hour)
 		if err != nil {
-			t.Fatalf("creating authorizer: %v", err)
+			t.Fatalf("Failed to create authorizer: %v", err)
 		}
 
 		cases := []struct {
@@ -226,13 +216,13 @@ func TestAuthorizer(t *testing.T) {
 			perm     Permission
 		}{
 			{
-				name:     "can grant write on docs",
+				name:     "can_grant_write_on_docs",
 				username: "tundra",
 				path:     "/doc/guide.txt",
 				perm:     GrantWrite,
 			},
 		}
-		runEffectivePermissionTests(t, auth, cases)
+		runPermTests(t, auth, cases)
 	})
 
 	t.Run("SuperAdminPermissions", func(t *testing.T) {
@@ -243,22 +233,23 @@ func TestAuthorizer(t *testing.T) {
 			perm     Permission
 		}{
 			{
-				name:     "has full access everywhere",
+				name:     "has_full_access_everywhere",
 				username: "dios",
 				path:     "/",
 				perm:     GrantGrant,
 			},
 			{
-				name:     "has full access to data",
+				name:     "has_full_access_to_data",
 				username: "dios",
 				path:     "/data/notes",
 				perm:     GrantGrant,
 			},
 		}
-		runEffectivePermissionTests(t, auth, cases)
+		runPermTests(t, auth, cases)
 	})
 
 	t.Run("InheritanceAndOverrides", func(t *testing.T) {
+		// Create a new authorizer with specific test data for this case
 		auth, err := NewAuthorizer(&mockSource{data: map[string]interface{}{
 			"*": map[string]interface{}{
 				".": Read,
@@ -284,9 +275,9 @@ func TestAuthorizer(t *testing.T) {
 					},
 				},
 			},
-		}}, time.Minute)
+		}}, time.Hour)
 		if err != nil {
-			t.Fatalf("creating authorizer: %v", err)
+			t.Fatalf("Failed to create authorizer: %v", err)
 		}
 
 		cases := []struct {
@@ -296,25 +287,25 @@ func TestAuthorizer(t *testing.T) {
 			perm     Permission
 		}{
 			{
-				name:     "can list players directory",
+				name:     "can_list_players_directory",
 				username: "tundra",
 				path:     "/players",
 				perm:     Read,
 			},
 			{
-				name:     "can list specific player directory",
+				name:     "can_list_specific_player_directory",
 				username: "tundra",
 				path:     "/players/frogo",
 				perm:     Read,
 			},
 			{
-				name:     "cannot access player files",
+				name:     "cannot_access_player_files",
 				username: "tundra",
 				path:     "/players/frogo/workroom.c",
 				perm:     Revoked,
 			},
 		}
-		runEffectivePermissionTests(t, auth, cases)
+		runPermTests(t, auth, cases)
 	})
 
 	t.Run("GroupMembership", func(t *testing.T) {
@@ -330,19 +321,19 @@ func TestAuthorizer(t *testing.T) {
 	})
 }
 
-// runEffectivePermissionTests is a helper function to run permission test cases
-func runEffectivePermissionTests(t *testing.T, auth Authorizer, cases []struct {
+// runPermTests is a helper function to run permission test cases
+func runPermTests(t *testing.T, auth *Authorizer, cases []struct {
 	name     string
 	username string
 	path     string
 	perm     Permission
 }) {
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			got := auth.GetEffectivePermission(c.username, c.path)
-			if got != c.perm {
-				t.Errorf("GetEffectivePermission(%s, %s) = %v, want %v",
-					c.username, c.path, got, c.perm)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := auth.GetEffectivePermission(tc.username, tc.path)
+			if got != tc.perm {
+				t.Errorf("GetEffectivePermission(%q, %q) = %v, want %v",
+					tc.username, tc.path, got, tc.perm)
 			}
 		})
 	}
