@@ -103,18 +103,20 @@ func (d *ftpDriver) AuthUser(cc ftpserverlib.ClientContext, user, pass string) (
 	}
 	fmt.Printf("AuthUser: authentication successful for user=%s\n", user)
 
-	// Generate the user's home path from the pattern
-	homePath := "/"
+	// Generate home directory path using proper path joining
+	var homePath string
 	if d.server.config.HomePattern != "" {
-		homePath = filepath.Join("/", fmt.Sprintf(d.server.config.HomePattern, user))
+		// Create clean, relative path for home directory
+		homePath = filepath.Clean(fmt.Sprintf(d.server.config.HomePattern, user))
 		fmt.Printf("AuthUser: using home path: %s\n", homePath)
 	}
 
-	// Create a new filesystem rooted at the server's root directory
+	// Create filesystem with root already handled
 	fs := afero.NewBasePathFs(afero.NewOsFs(), d.server.config.RootDir)
 
-	// Set the initial working directory
-	cc.SetPath(homePath)
+	// Set initial FTP path to home directory
+	initialPath := filepath.Join("/", homePath)
+	cc.SetPath(initialPath)
 
 	client := &ftpClient{
 		server:   d.server,
@@ -159,22 +161,20 @@ type ftpClient struct {
 func (c *ftpClient) resolvePath(name string) (string, error) {
 	fmt.Printf("resolvePath: input=%s, user=%s, homePath=%s, rootPath=%s\n", name, c.user, c.homePath, c.rootPath)
 
-	// Clean the path and ensure it doesn't escape root
-	name = filepath.Clean(name)
-	if !strings.HasPrefix(name, "/") {
-		name = filepath.Join(c.homePath, name)
-	} else {
-		// For absolute paths, remove the leading slash to make it relative
-		name = name[1:]
-	}
+	// Convert FTP protocol path (always forward slashes) to system path
+	cleanPath := filepath.FromSlash(filepath.Clean(name))
 
-	// Special case for root path
-	if name == "" {
+	// Root path is special
+	if cleanPath == "/" || cleanPath == "." || cleanPath == "" {
 		return "", nil
 	}
 
-	fmt.Printf("resolvePath: resolved to %s\n", name)
-	return name, nil
+	// Strip leading slash for relative paths
+	if strings.HasPrefix(cleanPath, string(filepath.Separator)) {
+		cleanPath = cleanPath[1:]
+	}
+
+	return cleanPath, nil
 }
 
 // GetFS returns the filesystem - part of ftpserverlib.ClientDriver interface
