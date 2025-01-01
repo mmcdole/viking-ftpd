@@ -13,6 +13,7 @@ type Config struct {
 	ListenAddr         string `json:"listen_addr"`
 	Port               int    `json:"port"`
 	FTPRootDir         string `json:"ftp_root_dir"`      // Root directory for FTP access
+	HomePattern        string `json:"home_pattern"`      // Pattern for user home directories (e.g., "players/%s")
 	// MUD-specific paths
 	CharacterDirPath  string `json:"character_dir_path"` // Path to character files directory
 	AccessFilePath    string `json:"access_file_path"`   // Path to the MUD's access.o file
