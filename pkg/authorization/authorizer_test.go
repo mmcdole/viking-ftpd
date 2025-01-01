@@ -28,6 +28,10 @@ func testData() map[string]interface{} {
 				"*": Revoked, // REVOKED access to all player directories
 			},
 		},
+		// User with global grant permission
+		"drake": map[string]interface{}{
+			"*": GrantGrant, // GRANT_GRANT on everything
+		},
 		// Arch users
 		"knubo": map[string]interface{}{
 			"?": []interface{}{"Arch_full"}, // Group membership
@@ -242,6 +246,41 @@ func TestAuthorizer(t *testing.T) {
 				name:     "has_full_access_to_data",
 				username: "dios",
 				path:     "/data/notes",
+				perm:     GrantGrant,
+			},
+		}
+		runPermTests(t, auth, cases)
+	})
+
+	t.Run("GlobalGrantPermissions", func(t *testing.T) {
+		cases := []struct {
+			name     string
+			username string
+			path     string
+			perm     Permission
+		}{
+			{
+				name:     "drake_root_access",
+				username: "drake",
+				path:     "/",
+				perm:     GrantGrant,
+			},
+			{
+				name:     "drake_players_access",
+				username: "drake",
+				path:     "/players",
+				perm:     GrantGrant,
+			},
+			{
+				name:     "drake_other_player_access",
+				username: "drake",
+				path:     "/players/knubo",
+				perm:     GrantGrant,
+			},
+			{
+				name:     "drake_own_dir_access",
+				username: "drake",
+				path:     "/players/drake",
 				perm:     GrantGrant,
 			},
 		}

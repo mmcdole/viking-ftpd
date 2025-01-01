@@ -41,10 +41,14 @@ func (a *Authorizer) refreshCache() error {
 		return fmt.Errorf("loading raw data: %w", err)
 	}
 
+	fmt.Printf("refreshCache: raw data=%#v\n", rawData)
+
 	trees, err := ConvertToAccessTrees(rawData)
 	if err != nil {
 		return fmt.Errorf("converting access trees: %w", err)
 	}
+
+	fmt.Printf("refreshCache: converted trees=%#v\n", trees)
 
 	a.mu.Lock()
 	defer a.mu.Unlock()
