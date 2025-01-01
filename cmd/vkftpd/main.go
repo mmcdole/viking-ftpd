@@ -39,7 +39,8 @@ The config file should be in JSON format with the following structure:
     "max_connections": 10,              // Max concurrent connections
     "idle_timeout": 300,                // Idle timeout in seconds
     "character_cache_time": 60,         // How long to cache character data
-    "access_cache_time": 60             // How long to cache access permissions
+    "access_cache_time": 60,            // How long to cache access permissions
+    "home_pattern": "players/%s"        // Home directory pattern (%s = username)
 }
 
 Paths in the config file can be relative to the config file location.
@@ -107,6 +108,7 @@ func main() {
 		ListenAddr:           config.ListenAddr,
 		Port:                 config.Port,
 		RootDir:              config.FTPRootDir,
+		HomePattern:          config.HomePattern,
 		PassiveTransferPorts: config.PassivePortRange,
 	}, authorizer, authenticator)
 	if err != nil {
