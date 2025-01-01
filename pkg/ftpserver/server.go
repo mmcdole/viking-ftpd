@@ -2,6 +2,7 @@ package ftpserver
 
 import (
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -65,6 +66,8 @@ func (s *Server) Stop() error {
 type ftpDriver struct {
 	server *Server
 }
+
+var errNoTLS = errors.New("TLS is not configured")
 
 // GetSettings returns server settings
 func (d *ftpDriver) GetSettings() (*ftpserverlib.Settings, error) {
@@ -132,8 +135,8 @@ func (d *ftpDriver) AuthUser(cc ftpserverlib.ClientContext, user, pass string) (
 // GetTLSConfig returns TLS config
 func (d *ftpDriver) GetTLSConfig() (*tls.Config, error) {
 	if d.server.config.TLSCertFile == "" || d.server.config.TLSKeyFile == "" {
-		// If no TLS config is provided, return nil to indicate no TLS support
-		return nil, nil
+		// If no TLS config is provided, return error to indicate no TLS support
+		return nil, errNoTLS
 	}
 
 	cert, err := tls.LoadX509KeyPair(d.server.config.TLSCertFile, d.server.config.TLSKeyFile)
