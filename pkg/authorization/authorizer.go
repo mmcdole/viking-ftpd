@@ -104,17 +104,16 @@ func (a *Authorizer) GetEffectivePermission(username string, filepath string) Pe
 
 	fmt.Printf("GetEffectivePermission: user=%s, path=%s, parts=%v\n", username, filepath, parts)
 
-	a.mu.RLock()
-	defer a.mu.RUnlock()
-
 	// Check implicit permissions first
 	if len(parts) >= 2 && parts[0] == "players" {
 		if parts[1] == username {
 			fmt.Printf("GetEffectivePermission: user=%s has implicit GrantGrant on own directory %s\n", username, filepath)
 			return GrantGrant // Users always have GRANT_GRANT on their own directory
-		} else if len(parts) >= 3 && parts[2] == "open" {
+		}
+		// Check for open directory at exactly level 3
+		if len(parts) >= 3 && parts[2] == "open" && len(parts) == 3 {
 			fmt.Printf("GetEffectivePermission: user=%s has implicit Read on open directory %s\n", username, filepath)
-			return Read // Everyone can read open directories
+			return Read // Everyone can read open directories at level 3
 		}
 	}
 

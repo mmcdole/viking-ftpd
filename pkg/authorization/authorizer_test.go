@@ -128,7 +128,7 @@ func TestAuthorizer(t *testing.T) {
 			{
 				name:     "can_read_open_directories",
 				username: "tundra",
-				path:     "/players/random/open/file.txt",
+				path:     "/players/random/open",
 				perm:     Read,
 			},
 		}
@@ -163,7 +163,7 @@ func TestAuthorizer(t *testing.T) {
 			{
 				name:     "can_read_open_directories",
 				username: "mousepad",
-				path:     "/players/frogo/open/file.txt",
+				path:     "/players/frogo/open",
 				perm:     Read,
 			},
 		}
@@ -428,6 +428,59 @@ func TestAuthorizer(t *testing.T) {
 		if len(groups) != 0 {
 			t.Errorf("GetUserGroups(mousepad) = %v, want []", groups)
 		}
+	})
+
+	t.Run("OpenDirectoryPermissions", func(t *testing.T) {
+		// Create a new authorizer with specific test data for this case
+		auth, err := NewAuthorizer(&mockSource{data: map[string]interface{}{
+			"access_map": map[string]interface{}{
+				// Default permissions
+				"*": map[string]interface{}{
+					".":          Read,    // READ on root itself
+					"*":          Revoked, // REVOKED by default
+					"players": map[string]interface{}{
+						".": Read,    // READ on /players itself
+						"*": Revoked, // REVOKED on all player dirs
+					},
+				},
+			},
+		}}, time.Hour)
+		if err != nil {
+			t.Fatalf("Failed to create authorizer: %v", err)
+		}
+
+		cases := []struct {
+			name     string
+			username string
+			path     string
+			perm     Permission
+		}{
+			{
+				name:     "open_directory_at_level_3",
+				username: "tundra",
+				path:     "/players/knubo/open",
+				perm:     Read,
+			},
+			{
+				name:     "open_directory_deeper_no_access",
+				username: "tundra",
+				path:     "/players/knubo/area/open",
+				perm:     Revoked,
+			},
+			{
+				name:     "open_directory_in_own_dir",
+				username: "tundra",
+				path:     "/players/tundra/open",
+				perm:     GrantGrant, // Own directory takes precedence
+			},
+			{
+				name:     "non_open_directory",
+				username: "tundra",
+				path:     "/players/knubo/area",
+				perm:     Revoked,
+			},
+		}
+		runPermTests(t, auth, cases)
 	})
 }
 
