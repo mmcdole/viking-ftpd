@@ -81,72 +81,70 @@ func (a *Authorizer) HasPermission(username string, filepath string, requiredPer
 
 // GetEffectivePermission implements Authorizer
 func (a *Authorizer) GetEffectivePermission(username string, filepath string) Permission {
+	fmt.Printf("GetEffectivePermission: start check for user=%s, path=%s\n", username, filepath)
 
 	if err := a.ensureFreshCache(); err != nil {
 		fmt.Printf("GetEffectivePermission: cache refresh failed: %v\n", err)
 		return Revoked
 	}
 
-	return GrantGrant
+	// Clean the path and split into parts
+	parts := strings.Split(path.Clean(filepath), "/")
+	if len(parts) > 0 && parts[0] == "" {
+		parts = parts[1:]
+	}
+	// Handle root path specifically
+	if len(parts) == 1 && parts[0] == "" {
+		parts = []string{} // Empty array for root path
+	}
 
-	/*
-		 	// Clean the path and split into parts
-			parts := strings.Split(path.Clean(filepath), "/")
-			if len(parts) > 0 && parts[0] == "" {
-				parts = parts[1:]
-			}
-			// Handle root path specifically
-			if len(parts) == 1 && parts[0] == "" {
-				parts = []string{} // Empty array for root path
-			}
+	fmt.Printf("GetEffectivePermission: user=%s, path=%s, parts=%v\n", username, filepath, parts)
 
-			fmt.Printf("GetEffectivePermission: user=%s, path=%s, parts=%v\n", username, filepath, parts)
+	a.mu.RLock()
+	defer a.mu.RUnlock()
 
-			a.mu.RLock()
-			defer a.mu.RUnlock()
+	// Check implicit permissions first
+	if len(parts) >= 2 && parts[0] == "players" {
+		if parts[1] == username {
+			fmt.Printf("GetEffectivePermission: user=%s has implicit GrantGrant on own directory %s\n", username, filepath)
+			return GrantGrant // Users always have GRANT_GRANT on their own directory
+		} else if len(parts) >= 3 && parts[2] == "open" {
+			fmt.Printf("GetEffectivePermission: user=%s has implicit Read on open directory %s\n", username, filepath)
+			return Read // Everyone can read open directories
+		}
+	}
 
-			// Check implicit permissions first
-			if len(parts) >= 2 && parts[0] == "players" {
-				if parts[1] == username {
-					fmt.Printf("GetEffectivePermission: user=%s has implicit GrantGrant on own directory %s\n", username, filepath)
-					return GrantGrant // Users always have GRANT_GRANT on their own directory
-				} else if len(parts) >= 3 && parts[2] == "open" {
-					fmt.Printf("GetEffectivePermission: user=%s has implicit Read on open directory %s\n", username, filepath)
-					return Read // Everyone can read open directories
-				}
-			}
+	// Check user's direct permissions
+	if tree, ok := a.trees[username]; ok {
+		perm := a.checkNodePermission(tree.Root, parts)
+		fmt.Printf("GetEffectivePermission: user tree permission for %s: %v\n", username, perm)
+		if perm != Revoked {
+			return perm
+		}
+	}
 
-			// Check user's direct permissions
-			if tree, ok := a.trees[username]; ok {
-				perm := a.checkNodePermission(tree.Root, parts)
-				fmt.Printf("GetEffectivePermission: user tree permission for %s: %v\n", username, perm)
-				if perm != Revoked {
-					return perm
-				}
-			}
-
-			// Check group permissions
-			groups := a.GetUserGroups(username)
-			for _, group := range groups {
-				if tree, ok := a.trees[group]; ok {
-					perm := a.checkNodePermission(tree.Root, parts)
-					fmt.Printf("GetEffectivePermission: group tree permission for %s: %v\n", group, perm)
-					if perm != Revoked {
-						return perm
-					}
-				}
-			}
-
-			// Finally check default permissions
-			if tree, ok := a.trees["*"]; ok {
-				perm := a.checkNodePermission(tree.Root, parts)
-				fmt.Printf("GetEffectivePermission: default tree permission: %v\n", perm)
+	// Check group permissions
+	groups := a.GetUserGroups(username)
+	fmt.Printf("GetEffectivePermission: checking groups=%v\n", groups)
+	for _, group := range groups {
+		if tree, ok := a.trees[group]; ok {
+			perm := a.checkNodePermission(tree.Root, parts)
+			fmt.Printf("GetEffectivePermission: group tree permission for %s: %v\n", group, perm)
+			if perm != Revoked {
 				return perm
 			}
+		}
+	}
 
-			fmt.Printf("GetEffectivePermission: no permissions found for user=%s, path=%s\n", username, filepath)
-			return Revoked
-	*/
+	// Finally check default permissions
+	if tree, ok := a.trees["*"]; ok {
+		perm := a.checkNodePermission(tree.Root, parts)
+		fmt.Printf("GetEffectivePermission: default tree permission: %v\n", perm)
+		return perm
+	}
+
+	fmt.Printf("GetEffectivePermission: no permissions found for user=%s, path=%s\n", username, filepath)
+	return Revoked
 }
 
 // GetUserGroups implements Authorizer
