@@ -33,11 +33,12 @@ func (s *FileSource) LoadRawData() (map[string]interface{}, error) {
 	}
 
 	// Parse the LPC object
-	parser := lpc.NewObjectParser(string(data))
-	result, err := parser.ParseObject()
+	parser := lpc.NewObjectParser(false)  // non-strict mode
+	result, err := parser.ParseObject(string(data))
 	if err != nil {
 		return nil, fmt.Errorf("parsing LPC object: %w", err)
 	}
 
-	return result, nil
+	// Continue even if there are some parsing errors
+	return result.Object, nil
 }

@@ -8,38 +8,104 @@ import (
 	"unicode/utf8"
 )
 
+// ObjectParser holds parsing configuration
 type ObjectParser struct {
+	strict bool
+}
+
+// NewObjectParser creates a new parser with the given options
+func NewObjectParser(strict bool) *ObjectParser {
+	return &ObjectParser{
+		strict: strict,
+	}
+}
+
+// ParseError represents an error that occurred while parsing a specific line
+type ParseError struct {
+	Line     string
+	Position int
+	Err      error
+}
+
+func (e *ParseError) Error() string {
+	return fmt.Sprintf("error at position %d: %v", e.Position, e.Err)
+}
+
+// ParseResult contains both the parsed object and any errors encountered
+type ParseResult struct {
+	Object map[string]interface{}
+	Errors []*ParseError
+}
+
+// LineParser handles parsing of individual lines
+type LineParser struct {
 	s   string
 	pos int
 	w   int
 }
 
-func NewObjectParser(input string) *ObjectParser {
-	return &ObjectParser{
-		s:   input,
+// NewLineParser creates a new parser for a single line
+func NewLineParser(line string) *LineParser {
+	return &LineParser{
+		s:   line,
 		pos: 0,
-		w:   len(input),
+		w:   len(line),
 	}
 }
 
-// ParseObject parses an entire LPC object from the input string.
-func (p *ObjectParser) ParseObject() (map[string]interface{}, error) {
-	if p.w == 0 {
+// ParseObject parses an LPC object from the input string
+func (p *ObjectParser) ParseObject(input string) (*ParseResult, error) {
+	if len(input) == 0 {
 		return nil, fmt.Errorf("input string is empty")
 	}
 
-	object := make(map[string]interface{})
-	for p.peek(0) != 0 {
-		key, value, err := p.parseLine()
-		if err != nil {
-			return nil, fmt.Errorf("error parsing object line at position %d: %w", p.pos, err)
-		}
-		object[key] = value
+	result := &ParseResult{
+		Object: make(map[string]interface{}),
+		Errors: make([]*ParseError, 0),
 	}
-	return object, nil
+
+	lines := strings.Split(input, "\n")
+	startPos := 0
+
+	for _, line := range lines {
+		if strings.TrimSpace(line) == "" {
+			startPos += len(line) + 1 // +1 for newline
+			continue
+		}
+
+		lp := NewLineParser(line)
+		key, value, err := lp.ParseLine()
+		if err != nil {
+			parseErr := &ParseError{
+				Line:     line,
+				Position: startPos + lp.pos,
+				Err:      err,
+			}
+			if p.strict {
+				return nil, parseErr
+			}
+			result.Errors = append(result.Errors, parseErr)
+		} else if key != "" {
+			result.Object[key] = value
+		}
+
+		startPos += len(line) + 1 // +1 for newline
+	}
+
+	return result, nil
 }
 
-func (p *ObjectParser) parseLine() (string, interface{}, error) {
+// ParseLine parses a single line of LPC object format, returning the key and value.
+// For blueprint lines, the key will be "blueprint" and the value will be the blueprint string.
+func (p *LineParser) ParseLine() (string, interface{}, error) {
+	if p.peek(0) == '#' {
+		blueprint, err := p.parseBlueprint()
+		if err != nil {
+			return "", nil, err
+		}
+		return "blueprint", blueprint, nil
+	}
+
 	key, err := p.parseIdentifier()
 	if err != nil {
 		return "", nil, err
@@ -50,20 +116,18 @@ func (p *ObjectParser) parseLine() (string, interface{}, error) {
 		return "", nil, err
 	}
 
-	// expect a new line or end of file
 	r := p.peek(0)
 	if r != '\n' && r != 0 {
 		return "", nil, fmt.Errorf("expected new line or end of file at position %d", p.pos)
 	}
-	if r == '\n' {
-		p.next() // consume the new line
-	}
+
 	return key, value, nil
 }
 
-func (p *ObjectParser) parseValue() (interface{}, error) {
+func (p *LineParser) parseValue() (interface{}, error) {
 	p.skipSpaces()
 	r := p.peek(0)
+
 	if r == '"' {
 		return p.parseString()
 	} else if unicode.IsDigit(r) || r == '-' {
@@ -78,7 +142,7 @@ func (p *ObjectParser) parseValue() (interface{}, error) {
 	return nil, fmt.Errorf("invalid value type '%c' at position %d", r, p.pos)
 }
 
-func (p *ObjectParser) parseNumber() (interface{}, error) {
+func (p *LineParser) parseNumber() (interface{}, error) {
 	// Look ahead to see if this is a float
 	isFloat := false
 	offset := 0
@@ -91,7 +155,6 @@ func (p *ObjectParser) parseNumber() (interface{}, error) {
 		}
 		offset++
 	}
-	// Check if there's an '=' indicating the new float type
 	if p.peek(offset) == '=' {
 		isFloat = true
 	}
@@ -101,40 +164,33 @@ func (p *ObjectParser) parseNumber() (interface{}, error) {
 	return p.parseInt()
 }
 
-func (p *ObjectParser) parseFloat() (float64, error) {
+func (p *LineParser) parseFloat() (float64, error) {
 	start := p.pos
 
-	// Skip optional negative sign
 	if p.peek(0) == '-' {
 		p.next()
 	}
 
-	// Consume digits and decimal point
 	for unicode.IsDigit(p.peek(0)) || p.peek(0) == '.' {
 		p.next()
 	}
 
-	// Parse the float part
 	floatStr := p.s[start:p.pos]
 	result, err := strconv.ParseFloat(floatStr, 64)
 	if err != nil {
 		return 0, fmt.Errorf("invalid float value %q at position %d: %w", floatStr, p.pos, err)
 	}
 
-	// If there's an '=', consume the hex part
 	if p.peek(0) == '=' {
 		p.next() // skip =
-
-		// Consume all hex digits (0-9, a-f, A-F)
 		for {
 			r := p.peek(0)
-			if r == 0 { // end of input
+			if r == 0 {
 				break
 			}
 			isDigit := r >= '0' && r <= '9'
 			isLowerHex := r >= 'a' && r <= 'f'
 			isUpperHex := r >= 'A' && r <= 'F'
-
 			if !(isDigit || isLowerHex || isUpperHex) {
 				break
 			}
@@ -145,7 +201,7 @@ func (p *ObjectParser) parseFloat() (float64, error) {
 	return result, nil
 }
 
-func (p *ObjectParser) parseIdentifier() (string, error) {
+func (p *LineParser) parseIdentifier() (string, error) {
 	start := p.pos
 	for r := p.next(); unicode.IsLetter(r) || unicode.IsDigit(r) || r == '_'; r = p.next() {
 		if r == 0 {
@@ -157,37 +213,21 @@ func (p *ObjectParser) parseIdentifier() (string, error) {
 	return result, nil
 }
 
-func (p *ObjectParser) parseMap() (map[string]interface{}, error) {
+func (p *LineParser) parseMap() (map[string]interface{}, error) {
 	if !p.expect('(') || !p.expect('[') {
 		return nil, fmt.Errorf("error in map: expected '([' at position %d", p.pos)
 	}
 	p.skipSpaces()
-	entryCount, err := p.parseInt()
+	size, err := p.parseInt()
 	if err != nil {
-		return nil, fmt.Errorf("error in map: invalid entry count at position %d", p.pos)
+		return nil, fmt.Errorf("error in map: invalid size at position %d", p.pos)
 	}
 	if !p.expect('|') {
-		return nil, fmt.Errorf("error in map: expected '|' delimiter at position %d", p.pos)
-	}
-	p.skipSpaces()
-
-	entries, err := p.parseMapEntryList(entryCount)
-	if err != nil {
-		return nil, fmt.Errorf("error in map: %w", err)
+		return nil, fmt.Errorf("error in map: expected '|' at position %d", p.pos)
 	}
 
-	if !p.expect(']') || !p.expect(')') {
-		return nil, fmt.Errorf("error in map: expected '])' at position %d", p.pos)
-	}
-
-	p.skipSpaces()
-
-	return entries, nil
-}
-
-func (p *ObjectParser) parseMapEntryList(entryCount int) (map[string]interface{}, error) {
 	entries := make(map[string]interface{})
-	for i := 0; i < entryCount; i++ {
+	for i := 0; i < size; i++ {
 		key, value, err := p.parseMapEntry()
 		if err != nil {
 			return nil, fmt.Errorf("error in map entry at position %d: %w", p.pos, err)
@@ -195,23 +235,42 @@ func (p *ObjectParser) parseMapEntryList(entryCount int) (map[string]interface{}
 		entries[key] = value
 		p.expect(',') // Allow trailing comma
 	}
+
+	if !p.expect(']') || !p.expect(')') {
+		return nil, fmt.Errorf("error in map: expected '])' at position %d", p.pos)
+	}
+
+	p.skipSpaces()
 	return entries, nil
 }
 
-func (p *ObjectParser) parseMapEntry() (string, interface{}, error) {
+func (p *LineParser) parseMapEntry() (string, interface{}, error) {
 	keyValue, err := p.parseValue()
 	if err != nil {
 		return "", nil, fmt.Errorf("error in map entry: invalid key at position %d: %v", p.pos, err)
 	}
 
 	var key string
-	switch v := keyValue.(type) {
+	switch k := keyValue.(type) {
 	case string:
-		key = v
+		key = k
 	case int:
-		key = strconv.Itoa(v)
+		key = strconv.Itoa(k)
+	case []interface{}:
+		parts := make([]string, len(k))
+		for i, item := range k {
+			switch iv := item.(type) {
+			case string:
+				parts[i] = iv
+			case int:
+				parts[i] = strconv.Itoa(iv)
+			default:
+				return "", nil, fmt.Errorf("error in map entry: list key contains unsupported type at position %d (got %T)", p.pos, item)
+			}
+		}
+		key = strings.Join(parts, ",")
 	default:
-		return "", nil, fmt.Errorf("error in map entry: key must be string or integer at position %d (got %T)", p.pos, keyValue)
+		return "", nil, fmt.Errorf("error in map entry: key must be string, integer, or list at position %d (got %T)", p.pos, keyValue)
 	}
 
 	p.skipSpaces()
@@ -228,7 +287,7 @@ func (p *ObjectParser) parseMapEntry() (string, interface{}, error) {
 	return key, value, nil
 }
 
-func (p *ObjectParser) parseList() ([]interface{}, error) {
+func (p *LineParser) parseList() ([]interface{}, error) {
 	if !p.expect('(') || !p.expect('{') {
 		return nil, fmt.Errorf("error in list: expected '({' at position %d", p.pos)
 	}
@@ -251,16 +310,13 @@ func (p *ObjectParser) parseList() ([]interface{}, error) {
 		p.expect(',') // Allow trailing comma
 	}
 
-	if !p.expect('}') {
-		return nil, fmt.Errorf("error in list: expected '}' at position %d", p.pos)
-	}
-	if !p.expect(')') {
-		return nil, fmt.Errorf("error in list: expected ')' at position %d", p.pos)
+	if !p.expect('}') || !p.expect(')') {
+		return nil, fmt.Errorf("error in list: expected '})' at position %d", p.pos)
 	}
 	return list, nil
 }
 
-func (p *ObjectParser) parseString() (string, error) {
+func (p *LineParser) parseString() (string, error) {
 	if !p.expect('"') {
 		return "", fmt.Errorf("error in string: expected '\"' at position %d", p.pos)
 	}
@@ -271,14 +327,11 @@ func (p *ObjectParser) parseString() (string, error) {
 			return "", fmt.Errorf("error in string: unterminated string at position %d", p.pos)
 		}
 		if r == '\\' {
-			// Skip the backslash
 			p.next()
-			// Get the escaped character
 			r = p.peek(0)
 			if r == '"' {
 				result.WriteRune('"')
 			} else {
-				// For other escape sequences, keep the backslash
 				result.WriteRune('\\')
 				result.WriteRune(r)
 			}
@@ -297,7 +350,7 @@ func (p *ObjectParser) parseString() (string, error) {
 	return result.String(), nil
 }
 
-func (p *ObjectParser) parseInt() (int, error) {
+func (p *LineParser) parseInt() (int, error) {
 	start := p.pos
 	if p.peek(0) == '-' {
 		p.next()
@@ -313,7 +366,23 @@ func (p *ObjectParser) parseInt() (int, error) {
 	return result, nil
 }
 
-func (p *ObjectParser) peek(n int) rune {
+func (p *LineParser) parseBlueprint() (string, error) {
+	if p.peek(0) != '#' {
+		return "", fmt.Errorf("expected blueprint to start with #")
+	}
+	p.next() // skip #
+
+	var blueprint strings.Builder
+	for p.peek(0) != 0 && p.peek(0) != '\n' {
+		blueprint.WriteRune(p.next())
+	}
+	if p.peek(0) == '\n' {
+		p.next()
+	}
+	return blueprint.String(), nil
+}
+
+func (p *LineParser) peek(n int) rune {
 	if p.pos+n >= len(p.s) {
 		return 0
 	}
@@ -321,7 +390,7 @@ func (p *ObjectParser) peek(n int) rune {
 	return r
 }
 
-func (p *ObjectParser) next() rune {
+func (p *LineParser) next() rune {
 	if p.pos >= len(p.s) {
 		return 0
 	}
@@ -331,7 +400,7 @@ func (p *ObjectParser) next() rune {
 	return r
 }
 
-func (p *ObjectParser) expect(r rune) bool {
+func (p *LineParser) expect(r rune) bool {
 	if p.next() == r {
 		return true
 	}
@@ -339,7 +408,7 @@ func (p *ObjectParser) expect(r rune) bool {
 	return false
 }
 
-func (p *ObjectParser) skipSpaces() {
+func (p *LineParser) skipSpaces() {
 	for {
 		r := p.peek(0)
 		if r != ' ' && r != '\t' {

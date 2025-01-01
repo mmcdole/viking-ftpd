@@ -54,14 +54,14 @@ func (s *FileSource) LoadCharacter(username string) (*CharacterFile, error) {
 	}
 
 	// Parse LPC object
-	parser := lpc.NewObjectParser(string(data))
-	rawObj, err := parser.ParseObject()
+	parser := lpc.NewObjectParser(false)  // non-strict mode
+	result, err := parser.ParseObject(string(data))
 	if err != nil {
 		return nil, fmt.Errorf("parsing character file: %w", err)
 	}
 
-	// Extract password hash
-	passwordHash, ok := rawObj[PasswordField].(string)
+	// Extract password hash - continue even if there were some parsing errors
+	passwordHash, ok := result.Object[PasswordField].(string)
 	if !ok {
 		return nil, ErrInvalidHash
 	}

@@ -1,0 +1,2 @@
+#std/obj/player.c
+name "Drake"
