@@ -16,60 +16,62 @@ func (m *mockSource) LoadRawData() (map[string]interface{}, error) {
 // testData returns a mock access tree that mimics a real MUD permission structure
 func testData() map[string]interface{} {
 	return map[string]interface{}{
-		// Default access tree for all users
-		"*": map[string]interface{}{
-			".":          Read,    // READ on root itself
-			"*":          Revoked, // REVOKED by default
-			"characters": Read,    // READ on /characters
-			"data":       Revoked, // REVOKED access to /data subtree
-			"log":        Write,   // WRITE on logs
-			"players": map[string]interface{}{
-				".": Read,    // READ on /players directory itself
-				"*": Revoked, // REVOKED access to all player directories
-			},
-		},
-		// User with global grant permission
-		"drake": map[string]interface{}{
-			"*": GrantGrant, // GRANT_GRANT on everything
-		},
-		// Arch users
-		"knubo": map[string]interface{}{
-			"?": []interface{}{"Arch_full"}, // Group membership
-			"players": map[string]interface{}{
-				"knubo": map[string]interface{}{
-					".": Read,  // READ on directory listing
-					"*": Write, // WRITE on contents
+		"access_map": map[string]interface{}{
+			// Default access tree for all users
+			"*": map[string]interface{}{
+				".":          Read,    // READ on root itself
+				"*":          Revoked, // REVOKED by default
+				"characters": Read,    // READ on /characters
+				"data":       Revoked, // REVOKED access to /data subtree
+				"log":        Write,   // WRITE on logs
+				"players": map[string]interface{}{
+					".": Read,    // READ on /players directory itself
+					"*": Revoked, // REVOKED access to all player directories
 				},
 			},
-		},
-		"frogo": map[string]interface{}{
-			"?": []interface{}{"Arch_full"}, // Group membership
-			"players": map[string]interface{}{
-				"frogo": map[string]interface{}{
-					".": Read,    // READ on directory listing
-					"*": Revoked, // REVOKED on contents by default
-					"com": map[string]interface{}{
-						".": Write, // WRITE on /players/frogo/com directory
+			// User with global grant permission
+			"drake": map[string]interface{}{
+				"*": GrantGrant, // GRANT_GRANT on everything
+			},
+			// Arch users
+			"knubo": map[string]interface{}{
+				"?": []interface{}{"Arch_full"}, // Group membership
+				"players": map[string]interface{}{
+					"knubo": map[string]interface{}{
+						".": Read,  // READ on directory listing
 						"*": Write, // WRITE on contents
 					},
 				},
 			},
-		},
-		// Group access trees (must start with capital letter)
-		"Arch_full": map[string]interface{}{
-			"players": map[string]interface{}{
-				"*": GrantRead, // GRANT_READ on all player directories
+			"frogo": map[string]interface{}{
+				"?": []interface{}{"Arch_full"}, // Group membership
+				"players": map[string]interface{}{
+					"frogo": map[string]interface{}{
+						".": Read,    // READ on directory listing
+						"*": Revoked, // REVOKED on contents by default
+						"com": map[string]interface{}{
+							".": Write, // WRITE on /players/frogo/com directory
+							"*": Write, // WRITE on contents
+						},
+					},
+				},
 			},
-			"log": Write, // WRITE on logs
-		},
-		"Arch_docs": map[string]interface{}{
-			"doc": map[string]interface{}{
-				"*": GrantWrite, // GRANT_WRITE on documentation
+			// Group access trees (must start with capital letter)
+			"Arch_full": map[string]interface{}{
+				"players": map[string]interface{}{
+					"*": GrantRead, // GRANT_READ on all player directories
+				},
+				"log": Write, // WRITE on logs
 			},
-		},
-		// Super admin
-		"dios": map[string]interface{}{
-			"*": GrantGrant, // GRANT_GRANT on everything
+			"Arch_docs": map[string]interface{}{
+				"doc": map[string]interface{}{
+					"*": GrantWrite, // GRANT_WRITE on documentation
+				},
+			},
+			// Super admin
+			"dios": map[string]interface{}{
+				"*": GrantGrant, // GRANT_GRANT on everything
+			},
 		},
 	}
 }
@@ -200,12 +202,14 @@ func TestAuthorizer(t *testing.T) {
 	t.Run("ArchDocsPermissions", func(t *testing.T) {
 		// Create a new authorizer with specific test data for this case
 		auth, err := NewAuthorizer(&mockSource{data: map[string]interface{}{
-			"tundra": map[string]interface{}{
-				"?": []interface{}{"Arch_docs"},
-			},
-			"Arch_docs": map[string]interface{}{
-				"doc": map[string]interface{}{
-					"*": GrantWrite,
+			"access_map": map[string]interface{}{
+				"tundra": map[string]interface{}{
+					"?": []interface{}{"Arch_docs"},
+				},
+				"Arch_docs": map[string]interface{}{
+					"doc": map[string]interface{}{
+						"*": GrantWrite,
+					},
 				},
 			},
 		}}, time.Hour)
@@ -287,30 +291,97 @@ func TestAuthorizer(t *testing.T) {
 		runPermTests(t, auth, cases)
 	})
 
+	t.Run("RevokedSubtreePermissions", func(t *testing.T) {
+		// Create a new authorizer with specific test data for this case
+		auth, err := NewAuthorizer(&mockSource{data: map[string]interface{}{
+			"access_map": map[string]interface{}{
+				// Default permissions
+				"*": map[string]interface{}{
+					".":          Read,    // READ on root
+					"*":          Read,    // READ by default
+					"players": map[string]interface{}{
+						".": Read,    // READ on /players itself
+						"*": Revoked, // REVOKED on all player dirs
+					},
+				},
+				// Regular user with no special permissions
+				"tundra": map[string]interface{}{},
+				// User with global grant permission
+				"dios": map[string]interface{}{
+					"*": GrantGrant, // GRANT_GRANT on everything
+				},
+			},
+		}}, time.Hour)
+		if err != nil {
+			t.Fatalf("Failed to create authorizer: %v", err)
+		}
+
+		cases := []struct {
+			name     string
+			username string
+			path     string
+			perm     Permission
+		}{
+			{
+				name:     "regular_user_players_dir",
+				username: "tundra",
+				path:     "/players",
+				perm:     Read,
+			},
+			{
+				name:     "regular_user_other_player_dir",
+				username: "tundra",
+				path:     "/players/knubo",
+				perm:     Revoked,
+			},
+			{
+				name:     "regular_user_own_dir",
+				username: "tundra",
+				path:     "/players/tundra",
+				perm:     GrantGrant, // Implicit grant on own dir
+			},
+			{
+				name:     "admin_players_dir",
+				username: "dios",
+				path:     "/players",
+				perm:     GrantGrant,
+			},
+			{
+				name:     "admin_other_player_dir",
+				username: "dios",
+				path:     "/players/knubo",
+				perm:     GrantGrant,
+			},
+		}
+		runPermTests(t, auth, cases)
+	})
+
 	t.Run("InheritanceAndOverrides", func(t *testing.T) {
 		// Create a new authorizer with specific test data for this case
 		auth, err := NewAuthorizer(&mockSource{data: map[string]interface{}{
-			"*": map[string]interface{}{
-				".": Read,
-				"*": Revoked,
-				"characters": map[string]interface{}{
+			"access_map": map[string]interface{}{
+				"*": map[string]interface{}{
 					".": Read,
 					"*": Revoked,
-				},
-				"data": map[string]interface{}{
-					".": Revoked,
-					"*": Revoked,
-				},
-				"log": map[string]interface{}{
-					".": Write,
-					"*": Write,
-				},
-				"players": map[string]interface{}{
-					".": Read,
-					"*": Revoked,
-					"frogo": map[string]interface{}{
+					"characters": map[string]interface{}{
 						".": Read,
 						"*": Revoked,
+					},
+					"data": map[string]interface{}{
+						".": Revoked,
+						"*": Revoked,
+					},
+					"log": map[string]interface{}{
+						".": Write,
+						"*": Write,
+					},
+					"players": map[string]interface{}{
+						".": Read,
+						"*": Revoked,
+						"frogo": map[string]interface{}{
+							".": Read,
+							"*": Revoked,
+						},
 					},
 				},
 			},

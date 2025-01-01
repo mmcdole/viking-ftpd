@@ -199,15 +199,13 @@ func (a *Authorizer) checkNodePermission(node *AccessNode, pathParts []string) P
 	if child, ok := node.Children[part]; ok {
 		// Recursively check child permissions
 		childPerm := a.checkNodePermission(child, rest)
-		if childPerm != Revoked {
-			fmt.Printf("Child permission not revoked, returning: %v\n", childPerm)
-			return childPerm
-		}
+		// If child returns Revoked, that's final - don't fall back to star access
+		fmt.Printf("Child permission for %s: %v\n", part, childPerm)
+		return childPerm
 	}
 
-	// No valid child permission or no matching child, use star access
-	// This matches the C code's behavior where star access is used for unmatched children
-	fmt.Printf("Using star access: %v\n", node.StarAccess)
+	// No matching child, use star access
+	fmt.Printf("No matching child, using star access: %v\n", node.StarAccess)
 	return node.StarAccess
 }
 
