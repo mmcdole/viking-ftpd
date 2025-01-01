@@ -95,7 +95,7 @@ func (d *ftpDriver) ClientDisconnected(cc ftpserverlib.ClientContext) {
 // AuthUser authenticates the user and returns a ClientDriver
 func (d *ftpDriver) AuthUser(cc ftpserverlib.ClientContext, user, pass string) (ftpserverlib.ClientDriver, error) {
 	fmt.Printf("AuthUser: authenticating user=%s\n", user)
-	
+
 	// Authenticate user
 	if err := d.server.authenticator.Authenticate(user, pass); err != nil {
 		fmt.Printf("AuthUser: authentication failed for user=%s: %v\n", user, err)
@@ -174,29 +174,23 @@ type ftpClient struct {
 // and converting absolute paths (with leading /) to relative paths
 func (c *ftpClient) resolvePath(name string) (string, error) {
 	fmt.Printf("resolvePath: input=%s, user=%s, homePath=%s, rootPath=%s\n", name, c.user, c.homePath, c.rootPath)
-	
+
 	// Clean the path and ensure it doesn't escape root
 	name = filepath.Clean(name)
 	if !strings.HasPrefix(name, "/") {
 		name = filepath.Join(c.homePath, name)
+	} else {
+		// For absolute paths, remove the leading slash to make it relative
+		name = name[1:]
 	}
-	
-	// Convert to relative path within root
-	rel, err := filepath.Rel(c.rootPath, name)
-	if err != nil {
-		fmt.Printf("resolvePath: error getting relative path: %v\n", err)
-		return "", fmt.Errorf("invalid path: %w", err)
+
+	// Special case for root path
+	if name == "" {
+		return "", nil
 	}
-	
-	// Ensure path doesn't escape root
-	if strings.HasPrefix(rel, "..") {
-		fmt.Printf("resolvePath: path escapes root: %s\n", rel)
-		return "", fmt.Errorf("path escapes root directory")
-	}
-	
-	result := rel
-	fmt.Printf("resolvePath: input=%s -> resolved=%s\n", name, result)
-	return result, nil
+
+	fmt.Printf("resolvePath: resolved to %s\n", name)
+	return name, nil
 }
 
 // GetFS returns the filesystem - part of ftpserverlib.ClientDriver interface
@@ -287,7 +281,7 @@ func (c *ftpClient) OpenFile(name string, flag int, perm os.FileMode) (afero.Fil
 	}
 
 	p := c.server.authorizer.GetEffectivePermission(c.user, path)
-	fmt.Printf("OpenFile: user=%s, path=%s, perm=%#v, flag=%v, canRead=%v, canWrite=%v\n", 
+	fmt.Printf("OpenFile: user=%s, path=%s, perm=%#v, flag=%v, canRead=%v, canWrite=%v\n",
 		c.user, path, p, flag, p.CanRead(), p.CanWrite())
 
 	if flag&os.O_RDONLY != 0 && !p.CanRead() {
