@@ -159,6 +159,15 @@ func (c *ftpClient) GetFS() afero.Fs {
 	return c
 }
 
+// ChangeCwd implements ftpserverlib.ClientDriverExtensionChdir
+func (c *ftpClient) ChangeCwd(path string) error {
+	// Check permission for the entire path at once
+	if !c.server.authorizer.GetEffectivePermission(c.user, path).CanRead() {
+		return os.ErrPermission
+	}
+	return nil
+}
+
 // =====================================
 // FTP Server-Specific Methods
 // These are specific to ftpserverlib.ClientDriver and its extensions
