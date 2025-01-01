@@ -103,19 +103,27 @@ func (d *ftpDriver) AuthUser(cc ftpserverlib.ClientContext, user, pass string) (
 	}
 	fmt.Printf("AuthUser: authentication successful for user=%s\n", user)
 
-	// Generate home directory path using proper path joining
-	var homePath string
-	if d.server.config.HomePattern != "" {
-		// Create clean, relative path for home directory
-		homePath = filepath.Clean(fmt.Sprintf(d.server.config.HomePattern, user))
-		fmt.Printf("AuthUser: using home path: %s\n", homePath)
-	}
-
 	// Create filesystem with root already handled
 	fs := afero.NewBasePathFs(afero.NewOsFs(), d.server.config.RootDir)
 
-	// Set initial FTP path to home directory
-	initialPath := filepath.Join("/", homePath)
+	// Generate home directory path using proper path joining
+	var homePath string
+	if d.server.config.HomePattern != "" {
+		candidateHome := filepath.Clean(fmt.Sprintf(d.server.config.HomePattern, user))
+		// Only set home if directory exists
+		if info, err := fs.Stat(candidateHome); err == nil && info.IsDir() {
+			homePath = candidateHome
+			fmt.Printf("AuthUser: using home path: %s\n", homePath)
+		} else {
+			fmt.Printf("AuthUser: home directory %s not found, using root\n", candidateHome)
+		}
+	}
+
+	// Set initial FTP path to home directory or root
+	initialPath := "/"
+	if homePath != "" {
+		initialPath = filepath.Join("/", homePath)
+	}
 	cc.SetPath(initialPath)
 
 	client := &ftpClient{
