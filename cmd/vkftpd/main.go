@@ -113,7 +113,7 @@ func main() {
 		log.Fatalf("Failed to create FTP server: %v", err)
 	}
 
-	log.Printf("Starting FTP server on %s:%d", config.ListenAddr, config.Port)
+	log.Printf("VikingMUD FTP Server (vkftpd) v%s starting on %s:%d", version, config.ListenAddr, config.Port)
 	if err := server.ListenAndServe(); err != nil {
 		log.Fatalf("Error starting server: %v", err)
 	}
