@@ -2,7 +2,9 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"log"
+	"os"
 	"path/filepath"
 	"time"
 
@@ -11,14 +13,67 @@ import (
 	"github.com/mmcdole/viking-ftpd/pkg/ftpserver"
 )
 
-func main() {
-	configPath := flag.String("config", "", "Path to config file")
-	flag.Parse()
+const (
+	version = "1.0.0"
+	usage   = `VikingMUD FTP Server (vkftpd) - Secure FTP access to VikingMUD
 
-	if *configPath == "" {
-		log.Fatal("Config file path is required")
+This server integrates with VikingMUD's authentication and access control systems,
+providing secure FTP access while respecting the MUD's permissions system.
+
+Usage: vkftpd [options]
+
+Options:
+  -config string
+        Path to config file (required)
+  -version
+        Show version information
+
+The config file should be in JSON format with the following structure:
+{
+    "listen_addr": "0.0.0.0",          // Address to listen on
+    "port": 2121,                      // Port to listen on
+    "ftp_root_dir": "./root",          // Root directory for FTP access
+    "character_dir_path": "./chars",    // Path to character save files
+    "access_file_path": "./access.o",   // Path to MUD's access.o
+    "passive_port_range": [2122,2150],  // Range for passive mode
+    "max_connections": 10,              // Max concurrent connections
+    "idle_timeout": 300,                // Idle timeout in seconds
+    "character_cache_time": 60,         // How long to cache character data
+    "access_cache_time": 60             // How long to cache access permissions
+}
+
+Paths in the config file can be relative to the config file location.
+The server authenticates users against their character files and enforces
+the same file access permissions as the MUD itself.
+`
+)
+
+func main() {
+	// Setup command line flags
+	configPath := flag.String("config", "", "Path to config file (required)")
+	showVersion := flag.Bool("version", false, "Show version information")
+
+	// Override default usage
+	flag.Usage = func() {
+		fmt.Fprintf(os.Stderr, "%s", usage)
 	}
 
+	flag.Parse()
+
+	// Handle version flag
+	if *showVersion {
+		fmt.Printf("Viking FTP Server v%s\n", version)
+		os.Exit(0)
+	}
+
+	// Check for required config
+	if *configPath == "" {
+		fmt.Fprintf(os.Stderr, "Error: Config file path is required\n\n")
+		flag.Usage()
+		os.Exit(1)
+	}
+
+	// Convert to absolute path if needed
 	if !filepath.IsAbs(*configPath) {
 		var err error
 		*configPath, err = filepath.Abs(*configPath)
@@ -50,8 +105,8 @@ func main() {
 	// Create and start FTP server
 	server, err := ftpserver.New(&ftpserver.Config{
 		ListenAddr:           config.ListenAddr,
-		Port:                config.Port,
-		RootDir:             config.FTPRootDir,
+		Port:                 config.Port,
+		RootDir:              config.FTPRootDir,
 		PassiveTransferPorts: config.PassivePortRange,
 	}, authorizer, authenticator)
 	if err != nil {

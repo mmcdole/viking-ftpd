@@ -16,7 +16,6 @@ type Config struct {
 	// MUD-specific paths
 	CharacterDirPath  string `json:"character_dir_path"` // Path to character files directory
 	AccessFilePath    string `json:"access_file_path"`   // Path to the MUD's access.o file
-	HostKeyPath       string `json:"host_key_path"`
 	// Optional settings
 	PassivePortRange [2]int `json:"passive_port_range"` // Range of ports for passive mode
 	MaxConnections   int    `json:"max_connections"`    // Maximum concurrent connections
@@ -49,9 +48,6 @@ func LoadConfig(path string) (*Config, error) {
 	}
 	if !filepath.IsAbs(config.AccessFilePath) {
 		config.AccessFilePath = filepath.Join(configDir, config.AccessFilePath)
-	}
-	if !filepath.IsAbs(config.HostKeyPath) {
-		config.HostKeyPath = filepath.Join(configDir, config.HostKeyPath)
 	}
 
 	// Set defaults
