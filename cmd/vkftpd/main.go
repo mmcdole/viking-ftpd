@@ -42,8 +42,7 @@ The config file should be in JSON format with the following structure:
     "character_cache_time": 60,         // How long to cache character data
     "access_cache_time": 60,            // How long to cache access permissions
     "home_pattern": "players/%s",       // Home directory pattern (%s = username)
-    "access_log_path": "./access.log",  // Path to access log file
-    "error_log_path": "./error.log"     // Path to error log file
+    "access_log_path": "./vkftpd-access.log"  // Optional: Path to access log file
 }
 
 Paths in the config file can be relative to the config file location.
@@ -96,7 +95,6 @@ func main() {
 	// Initialize logging
 	logConfig := logging.Config{
 		AccessLogPath: config.AccessLogPath,
-		ErrorLogPath:  config.ErrorLogPath,
 	}
 	if err := logging.Initialize(&logConfig); err != nil {
 		log.Fatalf("Failed to initialize logging: %v", err)

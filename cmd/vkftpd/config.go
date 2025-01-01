@@ -17,9 +17,8 @@ type Config struct {
 	// MUD-specific paths
 	CharacterDirPath  string `json:"character_dir_path"` // Path to character files directory
 	AccessFilePath    string `json:"access_file_path"`   // Path to the MUD's access.o file
-	// Logging configuration
-	AccessLogPath     string `json:"access_log_path"`    // Path to access log file
-	ErrorLogPath      string `json:"error_log_path"`     // Path to error log file
+	// Logging configuration (optional)
+	AccessLogPath     string `json:"access_log_path,omitempty"`    // Optional: Path to access log file
 	// Optional settings
 	PassivePortRange [2]int `json:"passive_port_range"` // Range of ports for passive mode
 	MaxConnections   int    `json:"max_connections"`    // Maximum concurrent connections
@@ -52,19 +51,21 @@ func LoadConfig(path string, config *Config) error {
 	if !filepath.IsAbs(config.AccessFilePath) {
 		config.AccessFilePath = filepath.Join(configDir, config.AccessFilePath)
 	}
-	if !filepath.IsAbs(config.AccessLogPath) {
+
+	// Only convert log paths to absolute if they are specified and not absolute
+	if config.AccessLogPath != "" && !filepath.IsAbs(config.AccessLogPath) {
 		config.AccessLogPath = filepath.Join(configDir, config.AccessLogPath)
 	}
-	if !filepath.IsAbs(config.ErrorLogPath) {
-		config.ErrorLogPath = filepath.Join(configDir, config.ErrorLogPath)
-	}
 
-	// Set defaults
+	// Set defaults for optional settings
 	if config.Port == 0 {
 		config.Port = 2121
 	}
-	if config.ListenAddr == "" {
-		config.ListenAddr = "0.0.0.0"
+	if config.PassivePortRange[0] == 0 {
+		config.PassivePortRange[0] = 50000
+	}
+	if config.PassivePortRange[1] == 0 {
+		config.PassivePortRange[1] = 50100
 	}
 	if config.MaxConnections == 0 {
 		config.MaxConnections = 10
