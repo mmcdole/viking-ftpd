@@ -232,7 +232,9 @@ func (p *LineParser) parseMap() (map[string]interface{}, error) {
 		if err != nil {
 			return nil, fmt.Errorf("error in map entry at position %d: %w", p.pos, err)
 		}
-		entries[key] = value
+		if key != "" {
+			entries[key] = value
+		}
 		p.expect(',') // Allow trailing comma
 	}
 
@@ -251,26 +253,15 @@ func (p *LineParser) parseMapEntry() (string, interface{}, error) {
 	}
 
 	var key string
+	var skip bool
 	switch k := keyValue.(type) {
 	case string:
 		key = k
 	case int:
 		key = strconv.Itoa(k)
-	case []interface{}:
-		parts := make([]string, len(k))
-		for i, item := range k {
-			switch iv := item.(type) {
-			case string:
-				parts[i] = iv
-			case int:
-				parts[i] = strconv.Itoa(iv)
-			default:
-				return "", nil, fmt.Errorf("error in map entry: list key contains unsupported type at position %d (got %T)", p.pos, item)
-			}
-		}
-		key = strings.Join(parts, ",")
 	default:
-		return "", nil, fmt.Errorf("error in map entry: key must be string, integer, or list at position %d (got %T)", p.pos, keyValue)
+		// For any other type, we'll skip this entry
+		skip = true
 	}
 
 	p.skipSpaces()
@@ -279,11 +270,17 @@ func (p *LineParser) parseMapEntry() (string, interface{}, error) {
 		return "", nil, fmt.Errorf("error in map entry: expected ':' at position %d, got '%c'", p.pos, r)
 	}
 	p.skipSpaces()
+
 	value, err := p.parseValue()
 	if err != nil {
 		return "", nil, fmt.Errorf("error in map entry: invalid value at position %d: %v", p.pos, err)
 	}
-	p.skipSpaces()
+
+	if skip {
+		// Return special values to indicate this entry should be skipped
+		return "", nil, nil
+	}
+
 	return key, value, nil
 }
 

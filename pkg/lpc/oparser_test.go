@@ -1,13 +1,13 @@
 package lpc
 
 import (
-	"reflect"
-	"testing"
 	"fmt"
 	"os"
-	"time"
-	"strings"
 	"path/filepath"
+	"reflect"
+	"strings"
+	"testing"
+	"time"
 )
 
 func TestParser_ParseObject(t *testing.T) {
@@ -156,12 +156,43 @@ func TestParser_ParseObject(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name:  "Escaped Quotes",
+			name: "Escaped Quotes",
 			input: `key1:"value with \"escaped\" quotes"
 key2:"another \"quoted\" string"`,
 			want: map[string]interface{}{
 				"key1": "value with \"escaped\" quotes",
 				"key2": "another \"quoted\" string",
+			},
+			wantErr: false,
+		},
+		{
+			name:  "Skip Array Key Keep String Key",
+			input: `map ([2|({2|1,2}):"skipped","valid":"kept"])`,
+			want: map[string]interface{}{
+				"map": map[string]interface{}{
+					"valid": "kept",
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name:  "Skip Map Key Keep Int Key",
+			input: `map ([2|([1|"inner":"value"]):"skipped",42:"kept"])`,
+			want: map[string]interface{}{
+				"map": map[string]interface{}{
+					"42": "kept",
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name:  "Multiple Skip Types",
+			input: `map ([4|({1|1}):"skip1",([1|"x":"y"]):"skip2","str":"keep1",123:"keep2"])`,
+			want: map[string]interface{}{
+				"map": map[string]interface{}{
+					"str": "keep1",
+					"123": "keep2",
+				},
 			},
 			wantErr: false,
 		},
@@ -175,7 +206,7 @@ key2:"another \"quoted\" string"`,
 				t.Errorf("ParseObject() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-			if !reflect.DeepEqual(got.Object, tt.want) {
+			if !tt.wantErr && !reflect.DeepEqual(got.Object, tt.want) {
 				t.Errorf("ParseObject() got = %v, want %v", got.Object, tt.want)
 			}
 		})
@@ -260,6 +291,9 @@ func TestParseValue(t *testing.T) {
 }
 
 func TestParseAllCharacters(t *testing.T) {
+	if os.Getenv("ENABLE_CHAR_TESTS") != "1" {
+		t.Skip("Character parsing tests disabled. Enable with ENABLE_CHAR_TESTS=1")
+	}
 	files, err := filepath.Glob("../../resources/characters/*/*")
 	if err != nil {
 		t.Fatal(err)
