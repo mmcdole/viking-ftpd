@@ -3,6 +3,8 @@ package authorization
 import (
 	"fmt"
 	"os"
+
+	"github.com/mmcdole/viking-ftpd/pkg/lpc"
 )
 
 // FileSource provides access data from LPC files
@@ -24,6 +26,18 @@ func (s *FileSource) LoadRawData() (map[string]interface{}, error) {
 		return nil, fmt.Errorf("file does not exist: %s", s.filePath)
 	}
 
-	// TODO: Implement LPC file parsing
-	return nil, fmt.Errorf("not implemented")
+	// Read the file contents
+	data, err := os.ReadFile(s.filePath)
+	if err != nil {
+		return nil, fmt.Errorf("reading file: %w", err)
+	}
+
+	// Parse the LPC object
+	parser := lpc.NewObjectParser(string(data))
+	result, err := parser.ParseObject()
+	if err != nil {
+		return nil, fmt.Errorf("parsing LPC object: %w", err)
+	}
+
+	return result, nil
 }
