@@ -108,15 +108,24 @@ func (d *ftpDriver) AuthUser(cc ftpserverlib.ClientContext, user, pass string) (
 
 	// Generate home directory path using proper path joining
 	var homePath string
+	fmt.Printf("AuthUser: HomePattern=%q\n", d.server.config.HomePattern)
 	if d.server.config.HomePattern != "" {
 		candidateHome := filepath.Clean(fmt.Sprintf(d.server.config.HomePattern, user))
+		fmt.Printf("AuthUser: checking candidate home directory: %s\n", candidateHome)
 		// Only set home if directory exists
 		if info, err := fs.Stat(candidateHome); err == nil && info.IsDir() {
 			homePath = candidateHome
-			fmt.Printf("AuthUser: using home path: %s\n", homePath)
+			fmt.Printf("AuthUser: home directory exists and is valid: %s\n", homePath)
 		} else {
-			fmt.Printf("AuthUser: home directory %s not found, using root\n", candidateHome)
+			if err != nil {
+				fmt.Printf("AuthUser: error checking home directory: %v\n", err)
+			} else {
+				fmt.Printf("AuthUser: path exists but is not a directory: %s\n", candidateHome)
+			}
+			fmt.Printf("AuthUser: falling back to root directory\n")
 		}
+	} else {
+		fmt.Printf("AuthUser: no HomePattern configured, using root\n")
 	}
 
 	// Set initial FTP path to home directory or root
@@ -124,6 +133,7 @@ func (d *ftpDriver) AuthUser(cc ftpserverlib.ClientContext, user, pass string) (
 	if homePath != "" {
 		initialPath = filepath.Join("/", homePath)
 	}
+	fmt.Printf("AuthUser: setting initial path to %s\n", initialPath)
 	cc.SetPath(initialPath)
 
 	client := &ftpClient{
