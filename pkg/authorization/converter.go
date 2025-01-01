@@ -6,8 +6,18 @@ import "fmt"
 func ConvertToAccessTrees(rawData map[string]interface{}) (map[string]*AccessTree, error) {
 	result := make(map[string]*AccessTree)
 
-	for username, rawUserTree := range rawData {
-		tree, err := convertToAccessTree(rawUserTree.(map[string]interface{}))
+	// Look for access_map key
+	accessMap, ok := rawData["access_map"].(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("access_map not found or invalid format")
+	}
+
+	for username, rawUserTree := range accessMap {
+		userMap, ok := rawUserTree.(map[string]interface{})
+		if !ok {
+			return nil, fmt.Errorf("invalid user tree format for %s: expected map[string]interface{}, got %T", username, rawUserTree)
+		}
+		tree, err := convertToAccessTree(userMap)
 		if err != nil {
 			return nil, fmt.Errorf("converting tree for user %s: %w", username, err)
 		}
