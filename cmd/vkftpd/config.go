@@ -17,6 +17,9 @@ type Config struct {
 	// MUD-specific paths
 	CharacterDirPath  string `json:"character_dir_path"` // Path to character files directory
 	AccessFilePath    string `json:"access_file_path"`   // Path to the MUD's access.o file
+	// Logging configuration
+	AccessLogPath     string `json:"access_log_path"`    // Path to access log file
+	ErrorLogPath      string `json:"error_log_path"`     // Path to error log file
 	// Optional settings
 	PassivePortRange [2]int `json:"passive_port_range"` // Range of ports for passive mode
 	MaxConnections   int    `json:"max_connections"`    // Maximum concurrent connections
@@ -28,15 +31,14 @@ type Config struct {
 }
 
 // LoadConfig loads configuration from a JSON file
-func LoadConfig(path string) (*Config, error) {
+func LoadConfig(path string, config *Config) error {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return nil, fmt.Errorf("reading config file: %w", err)
+		return fmt.Errorf("reading config file: %w", err)
 	}
 
-	var config Config
-	if err := json.Unmarshal(data, &config); err != nil {
-		return nil, fmt.Errorf("parsing config file: %w", err)
+	if err := json.Unmarshal(data, config); err != nil {
+		return fmt.Errorf("parsing config file: %w", err)
 	}
 
 	// Convert relative paths to absolute paths based on config file location
@@ -49,6 +51,12 @@ func LoadConfig(path string) (*Config, error) {
 	}
 	if !filepath.IsAbs(config.AccessFilePath) {
 		config.AccessFilePath = filepath.Join(configDir, config.AccessFilePath)
+	}
+	if !filepath.IsAbs(config.AccessLogPath) {
+		config.AccessLogPath = filepath.Join(configDir, config.AccessLogPath)
+	}
+	if !filepath.IsAbs(config.ErrorLogPath) {
+		config.ErrorLogPath = filepath.Join(configDir, config.ErrorLogPath)
 	}
 
 	// Set defaults
@@ -71,5 +79,5 @@ func LoadConfig(path string) (*Config, error) {
 		config.AccessCacheTime = 60 // 1 minute
 	}
 
-	return &config, nil
+	return nil
 }

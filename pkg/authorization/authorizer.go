@@ -41,14 +41,10 @@ func (a *Authorizer) refreshCache() error {
 		return fmt.Errorf("loading raw data: %w", err)
 	}
 
-	fmt.Printf("refreshCache: raw data=%#v\n", rawData)
-
 	trees, err := ConvertToAccessTrees(rawData)
 	if err != nil {
 		return fmt.Errorf("converting access trees: %w", err)
 	}
-
-	fmt.Printf("refreshCache: converted trees=%#v\n", trees)
 
 	a.mu.Lock()
 	defer a.mu.Unlock()
@@ -72,23 +68,16 @@ func (a *Authorizer) ensureFreshCache() error {
 
 // HasPermission implements Authorizer
 func (a *Authorizer) HasPermission(username string, filepath string, requiredPerm Permission) bool {
-	fmt.Printf("HasPermission: user=%s, path=%s, required=%v\n", username, filepath, requiredPerm)
 	if err := a.ensureFreshCache(); err != nil {
-		fmt.Printf("HasPermission: cache refresh failed: %v\n", err)
 		return false
 	}
 	effectivePerm := a.GetEffectivePermission(username, filepath)
-	fmt.Printf("HasPermission: user=%s, path=%s, required=%v, effective=%v -> %v\n",
-		username, filepath, requiredPerm, effectivePerm, effectivePerm >= requiredPerm)
 	return effectivePerm >= requiredPerm
 }
 
 // GetEffectivePermission implements Authorizer
 func (a *Authorizer) GetEffectivePermission(username string, filepath string) Permission {
-	fmt.Printf("GetEffectivePermission: start check for user=%s, path=%s\n", username, filepath)
-
 	if err := a.ensureFreshCache(); err != nil {
-		fmt.Printf("GetEffectivePermission: cache refresh failed: %v\n", err)
 		return Revoked
 	}
 
@@ -102,17 +91,13 @@ func (a *Authorizer) GetEffectivePermission(username string, filepath string) Pe
 		parts = []string{} // Empty array for root path
 	}
 
-	fmt.Printf("GetEffectivePermission: user=%s, path=%s, parts=%v\n", username, filepath, parts)
-
 	// Check implicit permissions first
 	if len(parts) >= 2 && parts[0] == "players" {
 		if parts[1] == username {
-			fmt.Printf("GetEffectivePermission: user=%s has implicit GrantGrant on own directory %s\n", username, filepath)
 			return GrantGrant // Users always have GRANT_GRANT on their own directory
 		}
 		// Check for open directory at exactly level 3
 		if len(parts) >= 3 && parts[2] == "open" && len(parts) == 3 {
-			fmt.Printf("GetEffectivePermission: user=%s has implicit Read on open directory %s\n", username, filepath)
 			return Read // Everyone can read open directories at level 3
 		}
 	}
@@ -120,7 +105,6 @@ func (a *Authorizer) GetEffectivePermission(username string, filepath string) Pe
 	// Check user's direct permissions
 	if tree, ok := a.trees[username]; ok {
 		perm := a.checkNodePermission(tree.Root, parts)
-		fmt.Printf("GetEffectivePermission: user tree permission for %s: %v\n", username, perm)
 		if perm != Revoked {
 			return perm
 		}
@@ -128,11 +112,9 @@ func (a *Authorizer) GetEffectivePermission(username string, filepath string) Pe
 
 	// Check group permissions
 	groups := a.GetUserGroups(username)
-	fmt.Printf("GetEffectivePermission: checking groups=%v\n", groups)
 	for _, group := range groups {
 		if tree, ok := a.trees[group]; ok {
 			perm := a.checkNodePermission(tree.Root, parts)
-			fmt.Printf("GetEffectivePermission: group tree permission for %s: %v\n", group, perm)
 			if perm != Revoked {
 				return perm
 			}
@@ -141,12 +123,9 @@ func (a *Authorizer) GetEffectivePermission(username string, filepath string) Pe
 
 	// Finally check default permissions
 	if tree, ok := a.trees["*"]; ok {
-		perm := a.checkNodePermission(tree.Root, parts)
-		fmt.Printf("GetEffectivePermission: default tree permission: %v\n", perm)
-		return perm
+		return a.checkNodePermission(tree.Root, parts)
 	}
 
-	fmt.Printf("GetEffectivePermission: no permissions found for user=%s, path=%s\n", username, filepath)
 	return Revoked
 }
 
@@ -172,22 +151,16 @@ func (a *Authorizer) GetUserGroups(username string) []string {
 // checkNodePermission recursively checks permissions in a node
 func (a *Authorizer) checkNodePermission(node *AccessNode, pathParts []string) Permission {
 	if node == nil {
-		fmt.Printf("checkNodePermission: node is nil\n")
 		return Revoked
 	}
-
-	fmt.Printf("checkNodePermission: pathParts=%v, DotAccess=%v, StarAccess=%v\n",
-		pathParts, node.DotAccess, node.StarAccess)
 
 	// At the target node (final node)
 	if len(pathParts) == 0 {
 		// At final node, dot access overrides star access
 		if node.DotAccess != Revoked {
-			fmt.Printf("At final node, using DotAccess: %v\n", node.DotAccess)
 			return node.DotAccess
 		}
 		// No dot access, use star access
-		fmt.Printf("At final node, using StarAccess: %v\n", node.StarAccess)
 		return node.StarAccess
 	}
 
@@ -199,12 +172,10 @@ func (a *Authorizer) checkNodePermission(node *AccessNode, pathParts []string) P
 		// Recursively check child permissions
 		childPerm := a.checkNodePermission(child, rest)
 		// If child returns Revoked, that's final - don't fall back to star access
-		fmt.Printf("Child permission for %s: %v\n", part, childPerm)
 		return childPerm
 	}
 
 	// No matching child, use star access
-	fmt.Printf("No matching child, using star access: %v\n", node.StarAccess)
 	return node.StarAccess
 }
 

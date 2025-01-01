@@ -6,12 +6,12 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"runtime"
 	"time"
 
 	ftpserverlib "github.com/fclairamb/ftpserverlib"
 	"github.com/mmcdole/viking-ftpd/pkg/authentication"
 	"github.com/mmcdole/viking-ftpd/pkg/authorization"
+	"github.com/mmcdole/viking-ftpd/pkg/logging"
 	"github.com/spf13/afero"
 )
 
@@ -96,8 +96,10 @@ func (d *ftpDriver) ClientDisconnected(cc ftpserverlib.ClientContext) {
 func (d *ftpDriver) AuthUser(cc ftpserverlib.ClientContext, user, pass string) (ftpserverlib.ClientDriver, error) {
 	// Authenticate user
 	if err := d.server.authenticator.Authenticate(user, pass); err != nil {
+		logging.LogAccess("LOGIN", user, "", "denied", "error", err.Error())
 		return nil, fmt.Errorf("authentication failed: %w", err)
 	}
+	logging.LogAccess("LOGIN", user, "", "success")
 
 	// Create filesystem with root already handled
 	fs := afero.NewBasePathFs(afero.NewOsFs(), d.server.config.RootDir)
@@ -162,10 +164,11 @@ func (c *ftpClient) GetFS() afero.Fs {
 
 // ChangeCwd implements ftpserverlib.ClientDriverExtensionChdir
 func (c *ftpClient) ChangeCwd(path string) error {
-	// Check permission for the entire path at once
 	if !c.server.authorizer.GetEffectivePermission(c.user, path).CanRead() {
+		logging.LogAccess("CHDIR", c.user, path, "denied")
 		return os.ErrPermission
 	}
+	logging.LogAccess("CHDIR", c.user, path, "success")
 	return nil
 }
 
@@ -176,32 +179,20 @@ func (c *ftpClient) ChangeCwd(path string) error {
 
 // ReadDir is required by ftpserverlib for directory listing
 func (c *ftpClient) ReadDir(name string) ([]os.FileInfo, error) {
-	fmt.Printf("\n=== FTP Directory List Request ===\n")
-	fmt.Printf("ReadDir: Client requesting directory: %s\n", name)
-	
-	// Get stack trace to see what FTP command triggered this
-	buf := make([]byte, 1024)
-	n := runtime.Stack(buf, false)
-	fmt.Printf("ReadDir: Stack trace:\n%s\n", buf[:n])
-	
 	path, err := c.resolvePath(name)
 	if err != nil {
-		fmt.Printf("ReadDir: Error resolving path %s: %v\n", name, err)
+		logging.LogError("LIST_DIR", err, "user", c.user, "path", name)
 		return nil, err
 	}
-	fmt.Printf("ReadDir: Resolved path: %s\n", path)
 
-	perm := c.server.authorizer.GetEffectivePermission(c.user, path)
-	fmt.Printf("ReadDir: Permission for %s: %v\n", path, perm)
-	
-	if !perm.CanRead() {
-		fmt.Printf("ReadDir: Permission denied for %s\n", path)
+	if !c.server.authorizer.GetEffectivePermission(c.user, path).CanRead() {
+		logging.LogAccess("LIST_DIR", c.user, path, "denied")
 		return nil, os.ErrPermission
 	}
 
 	f, err := c.fs.Open(path)
 	if err != nil {
-		fmt.Printf("ReadDir: Error opening directory %s: %v\n", path, err)
+		logging.LogError("LIST_DIR", err, "user", c.user, "path", path)
 		return nil, err
 	}
 	defer f.Close()
@@ -210,49 +201,49 @@ func (c *ftpClient) ReadDir(name string) ([]os.FileInfo, error) {
 		Readdir(count int) ([]os.FileInfo, error)
 	})
 	if !ok {
-		fmt.Printf("ReadDir: File %s does not support Readdir\n", path)
 		return nil, fmt.Errorf("file does not support directory listing")
 	}
 
 	files, err := readDirIface.Readdir(-1)
 	if err != nil {
-		fmt.Printf("ReadDir: Error reading directory contents of %s: %v\n", path, err)
+		logging.LogError("LIST_DIR", err, "user", c.user, "path", path)
 		return nil, err
 	}
 
-	fmt.Printf("ReadDir: Successfully read directory %s, found %d entries\n", path, len(files))
-	for _, file := range files {
-		fmt.Printf("ReadDir: Entry: %s, IsDir: %v, Size: %d\n", file.Name(), file.IsDir(), file.Size())
-	}
-	fmt.Printf("=== End Directory List Request ===\n\n")
-
+	logging.LogAccess("LIST_DIR", c.user, path, "success", "count", len(files))
 	return files, nil
 }
 
 // DeleteFile is required by ftpserverlib for DELE command
 func (c *ftpClient) DeleteFile(name string) error {
-	path, err := c.resolvePath(name)
-	if err != nil {
+	if !c.server.authorizer.GetEffectivePermission(c.user, name).CanWrite() {
+		logging.LogAccess("DELETE", c.user, name, "denied")
+		return os.ErrPermission
+	}
+
+	if err := c.fs.Remove(name); err != nil {
+		logging.LogError("DELETE", err, "user", c.user, "path", name)
 		return err
 	}
 
-	if !c.server.authorizer.GetEffectivePermission(c.user, path).CanWrite() {
-		return os.ErrPermission
-	}
-	return c.fs.Remove(path)
+	logging.LogAccess("DELETE", c.user, name, "success")
+	return nil
 }
 
 // MakeDirectory is required by ftpserverlib for MKD command
 func (c *ftpClient) MakeDirectory(name string) error {
-	path, err := c.resolvePath(name)
-	if err != nil {
+	if !c.server.authorizer.GetEffectivePermission(c.user, name).CanWrite() {
+		logging.LogAccess("CREATE_DIR", c.user, name, "denied")
+		return os.ErrPermission
+	}
+
+	if err := c.fs.Mkdir(name, 0755); err != nil {
+		logging.LogError("CREATE_DIR", err, "user", c.user, "path", name)
 		return err
 	}
 
-	if !c.server.authorizer.GetEffectivePermission(c.user, path).CanWrite() {
-		return os.ErrPermission
-	}
-	return c.fs.MkdirAll(path, 0755)
+	logging.LogAccess("CREATE_DIR", c.user, name, "success")
+	return nil
 }
 
 // =====================================
@@ -262,45 +253,67 @@ func (c *ftpClient) MakeDirectory(name string) error {
 
 // Open opens a file for reading - part of afero.Fs interface
 func (c *ftpClient) Open(name string) (afero.File, error) {
-	path, err := c.resolvePath(name)
+	if !c.server.authorizer.GetEffectivePermission(c.user, name).CanRead() {
+		logging.LogAccess("DOWNLOAD", c.user, name, "denied")
+		return nil, os.ErrPermission
+	}
+
+	file, err := c.fs.Open(name)
 	if err != nil {
+		logging.LogError("DOWNLOAD", err, "user", c.user, "path", name)
 		return nil, err
 	}
 
-	if !c.server.authorizer.GetEffectivePermission(c.user, path).CanRead() {
-		return nil, os.ErrPermission
-	}
-	return c.fs.Open(path)
+	logging.LogAccess("DOWNLOAD", c.user, name, "success")
+	return file, nil
 }
 
 // OpenFile opens a file using the given flags and mode - part of afero.Fs interface
 func (c *ftpClient) OpenFile(name string, flag int, perm os.FileMode) (afero.File, error) {
-	path, err := c.resolvePath(name)
+	// Check write permission if file is being created or modified
+	if flag&(os.O_WRONLY|os.O_RDWR|os.O_APPEND|os.O_CREATE|os.O_TRUNC) != 0 {
+		if !c.server.authorizer.GetEffectivePermission(c.user, name).CanWrite() {
+			logging.LogAccess("UPLOAD", c.user, name, "denied")
+			return nil, os.ErrPermission
+		}
+	} else if !c.server.authorizer.GetEffectivePermission(c.user, name).CanRead() {
+		logging.LogAccess("DOWNLOAD", c.user, name, "denied")
+		return nil, os.ErrPermission
+	}
+
+	file, err := c.fs.OpenFile(name, flag, perm)
 	if err != nil {
+		operation := "UPLOAD"
+		if flag&(os.O_WRONLY|os.O_RDWR|os.O_APPEND|os.O_CREATE|os.O_TRUNC) == 0 {
+			operation = "DOWNLOAD"
+		}
+		logging.LogError(operation, err, "user", c.user, "path", name)
 		return nil, err
 	}
 
-	if flag&os.O_RDONLY != 0 && !c.server.authorizer.GetEffectivePermission(c.user, path).CanRead() {
-		return nil, os.ErrPermission
+	operation := "UPLOAD"
+	if flag&(os.O_WRONLY|os.O_RDWR|os.O_APPEND|os.O_CREATE|os.O_TRUNC) == 0 {
+		operation = "DOWNLOAD"
 	}
-	if flag&(os.O_WRONLY|os.O_RDWR|os.O_APPEND|os.O_CREATE|os.O_TRUNC) != 0 && !c.server.authorizer.GetEffectivePermission(c.user, path).CanWrite() {
-		return nil, os.ErrPermission
-	}
-
-	return c.fs.OpenFile(path, flag, perm)
+	logging.LogAccess(operation, c.user, name, "success")
+	return file, nil
 }
 
 // Create creates a new file - part of afero.Fs interface
 func (c *ftpClient) Create(name string) (afero.File, error) {
-	path, err := c.resolvePath(name)
+	if !c.server.authorizer.GetEffectivePermission(c.user, name).CanWrite() {
+		logging.LogAccess("CREATE", c.user, name, "denied")
+		return nil, os.ErrPermission
+	}
+
+	file, err := c.fs.Create(name)
 	if err != nil {
+		logging.LogError("CREATE", err, "user", c.user, "path", name)
 		return nil, err
 	}
 
-	if !c.server.authorizer.GetEffectivePermission(c.user, path).CanWrite() {
-		return nil, os.ErrPermission
-	}
-	return c.fs.Create(path)
+	logging.LogAccess("CREATE", c.user, name, "success")
+	return file, nil
 }
 
 // Mkdir creates a directory - part of afero.Fs interface
@@ -331,47 +344,55 @@ func (c *ftpClient) MkdirAll(path string, perm os.FileMode) error {
 
 // Remove removes a file - part of afero.Fs interface
 func (c *ftpClient) Remove(name string) error {
-	path, err := c.resolvePath(name)
-	if err != nil {
+	if !c.server.authorizer.GetEffectivePermission(c.user, name).CanWrite() {
+		logging.LogAccess("DELETE", c.user, name, "denied")
+		return os.ErrPermission
+	}
+
+	if err := c.fs.Remove(name); err != nil {
+		logging.LogError("DELETE", err, "user", c.user, "path", name)
 		return err
 	}
 
-	if !c.server.authorizer.GetEffectivePermission(c.user, path).CanWrite() {
-		return os.ErrPermission
-	}
-	return c.fs.Remove(path)
+	logging.LogAccess("DELETE", c.user, name, "success")
+	return nil
 }
 
 // RemoveAll removes a directory and all its contents - part of afero.Fs interface
 func (c *ftpClient) RemoveAll(path string) error {
-	resolvedPath, err := c.resolvePath(path)
-	if err != nil {
+	if !c.server.authorizer.GetEffectivePermission(c.user, path).CanWrite() {
+		logging.LogAccess("DELETE_DIR", c.user, path, "denied")
+		return os.ErrPermission
+	}
+
+	if err := c.fs.RemoveAll(path); err != nil {
+		logging.LogError("DELETE_DIR", err, "user", c.user, "path", path)
 		return err
 	}
 
-	if !c.server.authorizer.GetEffectivePermission(c.user, resolvedPath).CanWrite() {
-		return os.ErrPermission
-	}
-	return c.fs.RemoveAll(resolvedPath)
+	logging.LogAccess("DELETE_DIR", c.user, path, "success")
+	return nil
 }
 
 // Rename renames a file - part of afero.Fs interface
 func (c *ftpClient) Rename(oldname, newname string) error {
-	oldPath, err := c.resolvePath(oldname)
-	if err != nil {
-		return err
-	}
-
-	newPath, err := c.resolvePath(newname)
-	if err != nil {
-		return err
-	}
-
-	if !c.server.authorizer.GetEffectivePermission(c.user, oldPath).CanWrite() ||
-		!c.server.authorizer.GetEffectivePermission(c.user, newPath).CanWrite() {
+	// Need write permission on both source and destination
+	if !c.server.authorizer.GetEffectivePermission(c.user, oldname).CanWrite() {
+		logging.LogAccess("RENAME", c.user, oldname, "denied")
 		return os.ErrPermission
 	}
-	return c.fs.Rename(oldPath, newPath)
+	if !c.server.authorizer.GetEffectivePermission(c.user, newname).CanWrite() {
+		logging.LogAccess("RENAME", c.user, newname, "denied")
+		return os.ErrPermission
+	}
+
+	if err := c.fs.Rename(oldname, newname); err != nil {
+		logging.LogError("RENAME", err, "user", c.user, "from", oldname, "to", newname)
+		return err
+	}
+
+	logging.LogAccess("RENAME", c.user, newname, "success", "from", oldname)
+	return nil
 }
 
 // Stat returns file info - part of afero.Fs interface

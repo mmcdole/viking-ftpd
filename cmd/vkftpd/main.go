@@ -11,6 +11,7 @@ import (
 	"github.com/mmcdole/viking-ftpd/pkg/authentication"
 	"github.com/mmcdole/viking-ftpd/pkg/authorization"
 	"github.com/mmcdole/viking-ftpd/pkg/ftpserver"
+	"github.com/mmcdole/viking-ftpd/pkg/logging"
 )
 
 const (
@@ -40,7 +41,9 @@ The config file should be in JSON format with the following structure:
     "idle_timeout": 300,                // Idle timeout in seconds
     "character_cache_time": 60,         // How long to cache character data
     "access_cache_time": 60,            // How long to cache access permissions
-    "home_pattern": "players/%s"        // Home directory pattern (%s = username)
+    "home_pattern": "players/%s",       // Home directory pattern (%s = username)
+    "access_log_path": "./access.log",  // Path to access log file
+    "error_log_path": "./error.log"     // Path to error log file
 }
 
 Paths in the config file can be relative to the config file location.
@@ -84,9 +87,19 @@ func main() {
 	}
 
 	// Load configuration
-	config, err := LoadConfig(*configPath)
+	var config Config
+	err := LoadConfig(*configPath, &config)
 	if err != nil {
 		log.Fatalf("Failed to load config: %v", err)
+	}
+
+	// Initialize logging
+	logConfig := logging.Config{
+		AccessLogPath: config.AccessLogPath,
+		ErrorLogPath:  config.ErrorLogPath,
+	}
+	if err := logging.Initialize(&logConfig); err != nil {
+		log.Fatalf("Failed to initialize logging: %v", err)
 	}
 
 	// Create authorizer for permission checks
