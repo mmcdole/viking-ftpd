@@ -20,6 +20,8 @@ type Config struct {
 	RootDir              string // Root directory that FTP users will be restricted to
 	HomePattern          string // Pattern for user home directories (e.g., "/home/%s" where %s is username)
 	PassiveTransferPorts [2]int
+	TLSCertFile          string // Path to TLS certificate file
+	TLSKeyFile           string // Path to TLS private key file
 }
 
 // Server wraps the FTP server with our custom auth
@@ -129,7 +131,20 @@ func (d *ftpDriver) AuthUser(cc ftpserverlib.ClientContext, user, pass string) (
 
 // GetTLSConfig returns TLS config
 func (d *ftpDriver) GetTLSConfig() (*tls.Config, error) {
-	return nil, nil
+	if d.server.config.TLSCertFile == "" || d.server.config.TLSKeyFile == "" {
+		// If no TLS config is provided, return nil to indicate no TLS support
+		return nil, nil
+	}
+
+	cert, err := tls.LoadX509KeyPair(d.server.config.TLSCertFile, d.server.config.TLSKeyFile)
+	if err != nil {
+		return nil, fmt.Errorf("loading TLS cert/key pair: %v", err)
+	}
+
+	return &tls.Config{
+		Certificates: []tls.Certificate{cert},
+		MinVersion:   tls.VersionTLS12,
+	}, nil
 }
 
 // ftpClient implements both ftpserverlib.ClientDriver and afero.Fs interfaces
