@@ -72,6 +72,7 @@ func (d *ftpDriver) GetSettings() (*ftpserverlib.Settings, error) {
 			Start: d.server.config.PassiveTransferPorts[0],
 			End:   d.server.config.PassiveTransferPorts[1],
 		},
+		TLSRequired: ftpserverlib.ClearOrEncrypted,
 	}, nil
 }
 
