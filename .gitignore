@@ -27,3 +27,6 @@ go.work
 ._*
 .Spotlight-V100
 .Trashes
+
+# Resource files
+resources/characters/**/*
