@@ -143,6 +143,13 @@ func (d *ftpDriver) GetTLSConfig() (*tls.Config, error) {
 	}, nil
 }
 
+// ftpFs extends afero.Fs with FTP-specific operations
+type ftpFs interface {
+	afero.Fs
+	Size(name string) (int64, error)
+	ModTime(name string) (time.Time, error)
+}
+
 // ftpClient implements both ftpserverlib.ClientDriver and afero.Fs interfaces
 type ftpClient struct {
 	server   *Server
@@ -154,6 +161,9 @@ type ftpClient struct {
 
 // resolvePath converts FTP protocol paths to filesystem paths
 func (c *ftpClient) resolvePath(name string) (string, error) {
+	if !filepath.IsAbs(name) {
+		name = filepath.Join(c.homePath, name)
+	}
 	return name, nil
 }
 
@@ -440,14 +450,53 @@ func (c *ftpClient) Chown(name string, uid, gid int) error {
 }
 
 // Chtimes changes file times - part of afero.Fs interface
-func (c *ftpClient) Chtimes(name string, atime, mtime time.Time) error {
-	path, err := c.resolvePath(name)
-	if err != nil {
-		return err
-	}
-
-	if !c.server.authorizer.GetEffectivePermission(c.user, path).CanWrite() {
+func (c *ftpClient) Chtimes(name string, atime time.Time, mtime time.Time) error {
+	if !c.server.authorizer.GetEffectivePermission(c.user, name).CanWrite() {
 		return os.ErrPermission
 	}
-	return c.fs.Chtimes(path, atime, mtime)
+	return c.fs.Chtimes(name, atime, mtime)
+}
+
+// Size returns the size of a file - part of ftpFs interface
+func (c *ftpClient) Size(name string) (int64, error) {
+	path, err := c.resolvePath(name)
+	if err != nil {
+		logging.LogError("SIZE", err, "user", c.user, "path", name)
+		return 0, err
+	}
+
+	if !c.server.authorizer.GetEffectivePermission(c.user, path).CanRead() {
+		logging.LogAccess("SIZE", c.user, path, "denied")
+		return 0, os.ErrPermission
+	}
+
+	info, err := c.fs.Stat(path)
+	if err != nil {
+		logging.LogError("SIZE", err, "user", c.user, "path", name)
+		return 0, err
+	}
+
+	return info.Size(), nil
+}
+
+// ModTime returns the modification time of a file - part of ftpFs interface
+func (c *ftpClient) ModTime(name string) (time.Time, error) {
+	path, err := c.resolvePath(name)
+	if err != nil {
+		logging.LogError("MDTM", err, "user", c.user, "path", name)
+		return time.Time{}, err
+	}
+
+	if !c.server.authorizer.GetEffectivePermission(c.user, path).CanRead() {
+		logging.LogAccess("MDTM", c.user, path, "denied")
+		return time.Time{}, os.ErrPermission
+	}
+
+	info, err := c.fs.Stat(path)
+	if err != nil {
+		logging.LogError("MDTM", err, "user", c.user, "path", name)
+		return time.Time{}, err
+	}
+
+	return info.ModTime(), nil
 }
