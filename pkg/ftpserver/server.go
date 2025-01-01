@@ -231,12 +231,19 @@ func (c *ftpClient) DeleteFile(name string) error {
 		return os.ErrPermission
 	}
 
+	// Get file size before deleting
+	info, err := c.fs.Stat(name)
+	var size int64
+	if err == nil {
+		size = info.Size()
+	}
+
 	if err := c.fs.Remove(name); err != nil {
 		logging.LogError("DELETE", err, "user", c.user, "path", name)
 		return err
 	}
 
-	logging.LogAccess("DELETE", c.user, name, "success")
+	logging.LogAccess("DELETE", c.user, name, "success", "size", size)
 	return nil
 }
 
@@ -274,7 +281,14 @@ func (c *ftpClient) Open(name string) (afero.File, error) {
 		return nil, err
 	}
 
-	logging.LogAccess("DOWNLOAD", c.user, name, "success")
+	// Get file size for logging
+	info, err := c.fs.Stat(name)
+	var size int64
+	if err == nil {
+		size = info.Size()
+	}
+
+	logging.LogAccess("DOWNLOAD", c.user, name, "success", "size", size)
 	return file, nil
 }
 
@@ -301,11 +315,18 @@ func (c *ftpClient) OpenFile(name string, flag int, perm os.FileMode) (afero.Fil
 		return nil, err
 	}
 
+	// Get file size for logging
+	info, err := c.fs.Stat(name)
+	var size int64
+	if err == nil {
+		size = info.Size()
+	}
+
 	operation := "UPLOAD"
 	if flag&(os.O_WRONLY|os.O_RDWR|os.O_APPEND|os.O_CREATE|os.O_TRUNC) == 0 {
 		operation = "DOWNLOAD"
 	}
-	logging.LogAccess(operation, c.user, name, "success")
+	logging.LogAccess(operation, c.user, name, "success", "size", size)
 	return file, nil
 }
 
@@ -387,21 +408,18 @@ func (c *ftpClient) RemoveAll(path string) error {
 // Rename renames a file - part of afero.Fs interface
 func (c *ftpClient) Rename(oldname, newname string) error {
 	// Need write permission on both source and destination
-	if !c.server.authorizer.GetEffectivePermission(c.user, oldname).CanWrite() {
-		logging.LogAccess("RENAME", c.user, oldname, "denied")
-		return os.ErrPermission
-	}
-	if !c.server.authorizer.GetEffectivePermission(c.user, newname).CanWrite() {
-		logging.LogAccess("RENAME", c.user, newname, "denied")
+	if !c.server.authorizer.GetEffectivePermission(c.user, oldname).CanWrite() ||
+		!c.server.authorizer.GetEffectivePermission(c.user, newname).CanWrite() {
+		logging.LogAccess("RENAME", c.user, fmt.Sprintf("%s -> %s", oldname, newname), "denied")
 		return os.ErrPermission
 	}
 
 	if err := c.fs.Rename(oldname, newname); err != nil {
-		logging.LogError("RENAME", err, "user", c.user, "from", oldname, "to", newname)
+		logging.LogError("RENAME", err, "user", c.user, "path", fmt.Sprintf("%s -> %s", oldname, newname))
 		return err
 	}
 
-	logging.LogAccess("RENAME", c.user, newname, "success", "from", oldname)
+	logging.LogAccess("RENAME", c.user, fmt.Sprintf("%s -> %s", oldname, newname), "success")
 	return nil
 }
 
