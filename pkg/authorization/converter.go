@@ -50,11 +50,21 @@ func convertToAccessNode(data map[string]interface{}) (*AccessNode, []string, er
 			}
 			node.DotAccess = perm
 		case "*":
-			perm, err := convertToPermission(value)
-			if err != nil {
-				return nil, nil, fmt.Errorf("converting star access: got %T with value %#v", value, value)
+			// Star access can be either a direct permission or a directory node
+			if childMap, ok := value.(map[string]interface{}); ok {
+				child, childGroups, err := convertToAccessNode(childMap)
+				if err != nil {
+					return nil, nil, fmt.Errorf("converting star directory: %w", err)
+				}
+				node.Children["*"] = child
+				groups = append(groups, childGroups...)
+			} else {
+				perm, err := convertToPermission(value)
+				if err != nil {
+					return nil, nil, fmt.Errorf("converting star access: got %T with value %#v", value, value)
+				}
+				node.StarAccess = perm
 			}
-			node.StarAccess = perm
 		case "?":
 			groupList, ok := value.([]interface{})
 			if !ok {
