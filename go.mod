@@ -4,7 +4,7 @@ go 1.22
 
 require (
 	github.com/digitive/crypt v0.2.0
-	github.com/fclairamb/ftpserverlib v0.21.0
+	github.com/fclairamb/ftpserverlib v0.25.0
 )
 
 require (

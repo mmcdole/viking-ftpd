@@ -175,24 +175,50 @@ func (c *ftpClient) ChangeCwd(path string) error {
 
 // ReadDir is required by ftpserverlib for directory listing
 func (c *ftpClient) ReadDir(name string) ([]os.FileInfo, error) {
+	fmt.Printf("ReadDir: Attempting to read directory: %s\n", name)
+	
 	path, err := c.resolvePath(name)
 	if err != nil {
+		fmt.Printf("ReadDir: Error resolving path %s: %v\n", name, err)
 		return nil, err
 	}
+	fmt.Printf("ReadDir: Resolved path: %s\n", path)
 
-	if !c.server.authorizer.GetEffectivePermission(c.user, path).CanRead() {
+	perm := c.server.authorizer.GetEffectivePermission(c.user, path)
+	fmt.Printf("ReadDir: Permission for %s: %v\n", path, perm)
+	
+	if !perm.CanRead() {
+		fmt.Printf("ReadDir: Permission denied for %s\n", path)
 		return nil, os.ErrPermission
 	}
 
 	f, err := c.fs.Open(path)
 	if err != nil {
+		fmt.Printf("ReadDir: Error opening directory %s: %v\n", path, err)
 		return nil, err
 	}
 	defer f.Close()
 
-	return f.(interface {
+	readDirIface, ok := f.(interface {
 		Readdir(count int) ([]os.FileInfo, error)
-	}).Readdir(-1)
+	})
+	if !ok {
+		fmt.Printf("ReadDir: File %s does not support Readdir\n", path)
+		return nil, fmt.Errorf("file does not support directory listing")
+	}
+
+	files, err := readDirIface.Readdir(-1)
+	if err != nil {
+		fmt.Printf("ReadDir: Error reading directory contents of %s: %v\n", path, err)
+		return nil, err
+	}
+
+	fmt.Printf("ReadDir: Successfully read directory %s, found %d entries\n", path, len(files))
+	for _, file := range files {
+		fmt.Printf("ReadDir: Entry: %s, IsDir: %v, Size: %d\n", file.Name(), file.IsDir(), file.Size())
+	}
+
+	return files, nil
 }
 
 // DeleteFile is required by ftpserverlib for DELE command
