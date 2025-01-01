@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	ftpserverlib "github.com/fclairamb/ftpserverlib"
@@ -93,22 +94,29 @@ func (d *ftpDriver) ClientDisconnected(cc ftpserverlib.ClientContext) {
 
 // AuthUser authenticates the user and returns a ClientDriver
 func (d *ftpDriver) AuthUser(cc ftpserverlib.ClientContext, user, pass string) (ftpserverlib.ClientDriver, error) {
+	fmt.Printf("AuthUser: authenticating user=%s\n", user)
+	
 	// Authenticate user
 	if err := d.server.authenticator.Authenticate(user, pass); err != nil {
+		fmt.Printf("AuthUser: authentication failed for user=%s: %v\n", user, err)
 		return nil, err
 	}
+	fmt.Printf("AuthUser: authentication successful for user=%s\n", user)
 
 	// Create home directory path
 	homePath := ""
 	if d.server.config.HomePattern != "" {
 		homePath = fmt.Sprintf(d.server.config.HomePattern, user)
 		homePath = filepath.Clean(homePath) // Clean to remove any .. or . components
+		fmt.Printf("AuthUser: home pattern=%s -> homePath=%s\n", d.server.config.HomePattern, homePath)
 
 		// Create full home directory path
 		fullHomePath := filepath.Join(d.server.config.RootDir, homePath)
+		fmt.Printf("AuthUser: creating home directory at %s\n", fullHomePath)
 
 		// Create home directory if it doesn't exist
 		if err := os.MkdirAll(fullHomePath, 0755); err != nil {
+			fmt.Printf("AuthUser: failed to create home directory: %v\n", err)
 			return nil, fmt.Errorf("failed to create home directory: %w", err)
 		}
 	}
@@ -117,19 +125,22 @@ func (d *ftpDriver) AuthUser(cc ftpserverlib.ClientContext, user, pass string) (
 	fs := afero.NewBasePathFs(afero.NewOsFs(), d.server.config.RootDir)
 
 	// Set the initial path to their home directory (relative to root)
+	initialPath := "/"
 	if homePath != "" {
-		cc.SetPath("/" + homePath)
-	} else {
-		cc.SetPath("/")
+		initialPath = "/" + homePath
 	}
+	fmt.Printf("AuthUser: setting initial path to %s\n", initialPath)
+	cc.SetPath(initialPath)
 
-	return &ftpClient{
+	client := &ftpClient{
 		server:   d.server,
 		user:     user,
 		fs:       fs,
 		homePath: homePath,
 		rootPath: d.server.config.RootDir,
-	}, nil
+	}
+	fmt.Printf("AuthUser: created client with homePath=%s, rootPath=%s\n", client.homePath, client.rootPath)
+	return client, nil
 }
 
 // GetTLSConfig returns TLS config
@@ -162,13 +173,30 @@ type ftpClient struct {
 // resolvePath converts FTP protocol paths to filesystem paths by cleaning the path
 // and converting absolute paths (with leading /) to relative paths
 func (c *ftpClient) resolvePath(name string) (string, error) {
-	// Clean the input path
-	path := filepath.Clean(name)
-	if filepath.IsAbs(path) {
-		// Strip leading separator for absolute paths
-		path = path[1:]
+	fmt.Printf("resolvePath: input=%s, user=%s, homePath=%s, rootPath=%s\n", name, c.user, c.homePath, c.rootPath)
+	
+	// Clean the path and ensure it doesn't escape root
+	name = filepath.Clean(name)
+	if !strings.HasPrefix(name, "/") {
+		name = filepath.Join(c.homePath, name)
 	}
-	return path, nil
+	
+	// Convert to relative path within root
+	rel, err := filepath.Rel(c.rootPath, name)
+	if err != nil {
+		fmt.Printf("resolvePath: error getting relative path: %v\n", err)
+		return "", fmt.Errorf("invalid path: %w", err)
+	}
+	
+	// Ensure path doesn't escape root
+	if strings.HasPrefix(rel, "..") {
+		fmt.Printf("resolvePath: path escapes root: %s\n", rel)
+		return "", fmt.Errorf("path escapes root directory")
+	}
+	
+	result := rel
+	fmt.Printf("resolvePath: input=%s -> resolved=%s\n", name, result)
+	return result, nil
 }
 
 // GetFS returns the filesystem - part of ftpserverlib.ClientDriver interface
@@ -234,53 +262,17 @@ func (c *ftpClient) MakeDirectory(name string) error {
 // These implement the standard filesystem interface
 // =====================================
 
-// Create creates a new file - part of afero.Fs interface
-func (c *ftpClient) Create(name string) (afero.File, error) {
-	path, err := c.resolvePath(name)
-	if err != nil {
-		return nil, err
-	}
-
-	if !c.server.authorizer.GetEffectivePermission(c.user, path).CanWrite() {
-		return nil, os.ErrPermission
-	}
-	return c.fs.Create(path)
-}
-
-// Mkdir creates a directory - part of afero.Fs interface
-func (c *ftpClient) Mkdir(name string, perm os.FileMode) error {
-	path, err := c.resolvePath(name)
-	if err != nil {
-		return err
-	}
-
-	if !c.server.authorizer.GetEffectivePermission(c.user, path).CanWrite() {
-		return os.ErrPermission
-	}
-	return c.fs.Mkdir(name, perm)
-}
-
-// MkdirAll creates a directory and all parent directories - part of afero.Fs interface
-func (c *ftpClient) MkdirAll(path string, perm os.FileMode) error {
-	resolvedPath, err := c.resolvePath(path)
-	if err != nil {
-		return err
-	}
-
-	if !c.server.authorizer.GetEffectivePermission(c.user, resolvedPath).CanWrite() {
-		return os.ErrPermission
-	}
-	return c.fs.MkdirAll(resolvedPath, perm)
-}
-
 // Open opens a file for reading - part of afero.Fs interface
 func (c *ftpClient) Open(name string) (afero.File, error) {
 	path, err := c.resolvePath(name)
 	if err != nil {
+		fmt.Printf("Open: error resolving path %s: %v\n", name, err)
 		return nil, err
 	}
 
-	if !c.server.authorizer.GetEffectivePermission(c.user, path).CanRead() {
+	perm := c.server.authorizer.GetEffectivePermission(c.user, path)
+	fmt.Printf("Open: user=%s, path=%s, perm=%#v, canRead=%v\n", c.user, path, perm, perm.CanRead())
+	if !perm.CanRead() {
 		return nil, os.ErrPermission
 	}
 	return c.fs.Open(path)
@@ -290,20 +282,70 @@ func (c *ftpClient) Open(name string) (afero.File, error) {
 func (c *ftpClient) OpenFile(name string, flag int, perm os.FileMode) (afero.File, error) {
 	path, err := c.resolvePath(name)
 	if err != nil {
+		fmt.Printf("OpenFile: error resolving path %s: %v\n", name, err)
 		return nil, err
 	}
 
 	p := c.server.authorizer.GetEffectivePermission(c.user, path)
+	fmt.Printf("OpenFile: user=%s, path=%s, perm=%#v, flag=%v, canRead=%v, canWrite=%v\n", 
+		c.user, path, p, flag, p.CanRead(), p.CanWrite())
 
 	if flag&os.O_RDONLY != 0 && !p.CanRead() {
 		return nil, os.ErrPermission
 	}
-
 	if flag&(os.O_WRONLY|os.O_RDWR|os.O_APPEND|os.O_CREATE|os.O_TRUNC) != 0 && !p.CanWrite() {
 		return nil, os.ErrPermission
 	}
 
 	return c.fs.OpenFile(path, flag, perm)
+}
+
+// Create creates a new file - part of afero.Fs interface
+func (c *ftpClient) Create(name string) (afero.File, error) {
+	path, err := c.resolvePath(name)
+	if err != nil {
+		fmt.Printf("Create: error resolving path %s: %v\n", name, err)
+		return nil, err
+	}
+
+	perm := c.server.authorizer.GetEffectivePermission(c.user, path)
+	fmt.Printf("Create: user=%s, path=%s, perm=%#v, canWrite=%v\n", c.user, path, perm, perm.CanWrite())
+	if !perm.CanWrite() {
+		return nil, os.ErrPermission
+	}
+	return c.fs.Create(path)
+}
+
+// Mkdir creates a directory - part of afero.Fs interface
+func (c *ftpClient) Mkdir(name string, perm os.FileMode) error {
+	path, err := c.resolvePath(name)
+	if err != nil {
+		fmt.Printf("Mkdir: error resolving path %s: %v\n", name, err)
+		return err
+	}
+
+	p := c.server.authorizer.GetEffectivePermission(c.user, path)
+	fmt.Printf("Mkdir: user=%s, path=%s, perm=%#v, canWrite=%v\n", c.user, path, p, p.CanWrite())
+	if !p.CanWrite() {
+		return os.ErrPermission
+	}
+	return c.fs.Mkdir(name, perm)
+}
+
+// MkdirAll creates a directory and all parent directories - part of afero.Fs interface
+func (c *ftpClient) MkdirAll(path string, perm os.FileMode) error {
+	resolvedPath, err := c.resolvePath(path)
+	if err != nil {
+		fmt.Printf("MkdirAll: error resolving path %s: %v\n", path, err)
+		return err
+	}
+
+	p := c.server.authorizer.GetEffectivePermission(c.user, resolvedPath)
+	fmt.Printf("MkdirAll: user=%s, path=%s, perm=%#v, canWrite=%v\n", c.user, resolvedPath, p, p.CanWrite())
+	if !p.CanWrite() {
+		return os.ErrPermission
+	}
+	return c.fs.MkdirAll(resolvedPath, perm)
 }
 
 // Remove removes a file - part of afero.Fs interface

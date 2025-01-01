@@ -68,15 +68,21 @@ func (a *Authorizer) ensureFreshCache() error {
 
 // HasPermission implements Authorizer
 func (a *Authorizer) HasPermission(username string, filepath string, requiredPerm Permission) bool {
+	fmt.Printf("HasPermission: user=%s, path=%s, required=%v\n", username, filepath, requiredPerm)
 	if err := a.ensureFreshCache(); err != nil {
+		fmt.Printf("HasPermission: cache refresh failed: %v\n", err)
 		return false
 	}
-	return a.GetEffectivePermission(username, filepath) >= requiredPerm
+	effectivePerm := a.GetEffectivePermission(username, filepath)
+	fmt.Printf("HasPermission: user=%s, path=%s, required=%v, effective=%v -> %v\n", 
+		username, filepath, requiredPerm, effectivePerm, effectivePerm >= requiredPerm)
+	return effectivePerm >= requiredPerm
 }
 
 // GetEffectivePermission implements Authorizer
 func (a *Authorizer) GetEffectivePermission(username string, filepath string) Permission {
 	if err := a.ensureFreshCache(); err != nil {
+		fmt.Printf("GetEffectivePermission: cache refresh failed: %v\n", err)
 		return Revoked
 	}
 
@@ -90,7 +96,7 @@ func (a *Authorizer) GetEffectivePermission(username string, filepath string) Pe
 		parts = []string{} // Empty array for root path
 	}
 
-	fmt.Printf("GetEffectivePermission: username=%s, filepath=%s, parts=%v\n", username, filepath, parts)
+	fmt.Printf("GetEffectivePermission: user=%s, path=%s, parts=%v\n", username, filepath, parts)
 
 	a.mu.RLock()
 	defer a.mu.RUnlock()
@@ -98,8 +104,10 @@ func (a *Authorizer) GetEffectivePermission(username string, filepath string) Pe
 	// Check implicit permissions first
 	if len(parts) >= 2 && parts[0] == "players" {
 		if parts[1] == username {
+			fmt.Printf("GetEffectivePermission: user=%s has implicit GrantGrant on own directory %s\n", username, filepath)
 			return GrantGrant // Users always have GRANT_GRANT on their own directory
 		} else if len(parts) >= 3 && parts[2] == "open" {
+			fmt.Printf("GetEffectivePermission: user=%s has implicit Read on open directory %s\n", username, filepath)
 			return Read // Everyone can read open directories
 		}
 	}
@@ -107,7 +115,7 @@ func (a *Authorizer) GetEffectivePermission(username string, filepath string) Pe
 	// Check user's direct permissions
 	if tree, ok := a.trees[username]; ok {
 		perm := a.checkNodePermission(tree.Root, parts)
-		fmt.Printf("User tree permission for %s: %v\n", username, perm)
+		fmt.Printf("GetEffectivePermission: user tree permission for %s: %v\n", username, perm)
 		if perm != Revoked {
 			return perm
 		}
@@ -118,7 +126,7 @@ func (a *Authorizer) GetEffectivePermission(username string, filepath string) Pe
 	for _, group := range groups {
 		if tree, ok := a.trees[group]; ok {
 			perm := a.checkNodePermission(tree.Root, parts)
-			fmt.Printf("Group tree permission for %s: %v\n", group, perm)
+			fmt.Printf("GetEffectivePermission: group tree permission for %s: %v\n", group, perm)
 			if perm != Revoked {
 				return perm
 			}
@@ -127,9 +135,12 @@ func (a *Authorizer) GetEffectivePermission(username string, filepath string) Pe
 
 	// Finally check default permissions
 	if tree, ok := a.trees["*"]; ok {
-		return a.checkNodePermission(tree.Root, parts)
+		perm := a.checkNodePermission(tree.Root, parts)
+		fmt.Printf("GetEffectivePermission: default tree permission: %v\n", perm)
+		return perm
 	}
 
+	fmt.Printf("GetEffectivePermission: no permissions found for user=%s, path=%s\n", username, filepath)
 	return Revoked
 }
 
