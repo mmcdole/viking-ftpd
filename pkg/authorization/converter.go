@@ -7,6 +7,7 @@ func ConvertToAccessTrees(rawData map[string]interface{}) (map[string]*AccessTre
 	result := make(map[string]*AccessTree)
 
 	for username, rawUserTree := range rawData {
+		fmt.Printf("DEBUG: Converting tree for user %q\n", username)
 		tree, err := convertToAccessTree(rawUserTree.(map[string]interface{}))
 		if err != nil {
 			return nil, fmt.Errorf("converting tree for user %s: %w", username, err)
@@ -40,21 +41,21 @@ func convertToAccessNode(data map[string]interface{}) (*AccessNode, []string, er
 	var groups []string
 
 	for key, value := range data {
+		fmt.Printf("DEBUG: Processing key %q with value type %T\n", key, value)
 		switch key {
 		case ".":
 			perm, err := convertToPermission(value)
 			if err != nil {
-				return nil, nil, fmt.Errorf("converting dot access: %w", err)
+				return nil, nil, fmt.Errorf("converting dot access: got %T with value %#v", value, value)
 			}
 			node.DotAccess = perm
 		case "*":
 			perm, err := convertToPermission(value)
 			if err != nil {
-				return nil, nil, fmt.Errorf("converting star access: %w", err)
+				return nil, nil, fmt.Errorf("converting star access: got %T with value %#v", value, value)
 			}
 			node.StarAccess = perm
 		case "?":
-			// Handle group membership
 			groupList, ok := value.([]interface{})
 			if !ok {
 				return nil, nil, fmt.Errorf("invalid group list format")
@@ -100,6 +101,7 @@ func convertToAccessNode(data map[string]interface{}) (*AccessNode, []string, er
 
 // convertToPermission converts a raw permission value into a Permission
 func convertToPermission(value interface{}) (Permission, error) {
+	fmt.Printf("DEBUG: Converting permission value: %#v (type: %T)\n", value, value)
 	switch v := value.(type) {
 	case int:
 		return Permission(v), nil
