@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"time"
 
 	ftpserverlib "github.com/fclairamb/ftpserverlib"
@@ -175,7 +176,13 @@ func (c *ftpClient) ChangeCwd(path string) error {
 
 // ReadDir is required by ftpserverlib for directory listing
 func (c *ftpClient) ReadDir(name string) ([]os.FileInfo, error) {
-	fmt.Printf("ReadDir: Attempting to read directory: %s\n", name)
+	fmt.Printf("\n=== FTP Directory List Request ===\n")
+	fmt.Printf("ReadDir: Client requesting directory: %s\n", name)
+	
+	// Get stack trace to see what FTP command triggered this
+	buf := make([]byte, 1024)
+	n := runtime.Stack(buf, false)
+	fmt.Printf("ReadDir: Stack trace:\n%s\n", buf[:n])
 	
 	path, err := c.resolvePath(name)
 	if err != nil {
@@ -217,6 +224,7 @@ func (c *ftpClient) ReadDir(name string) ([]os.FileInfo, error) {
 	for _, file := range files {
 		fmt.Printf("ReadDir: Entry: %s, IsDir: %v, Size: %d\n", file.Name(), file.IsDir(), file.Size())
 	}
+	fmt.Printf("=== End Directory List Request ===\n\n")
 
 	return files, nil
 }
