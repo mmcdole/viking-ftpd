@@ -63,6 +63,13 @@ func LogAccess(operation, user, path, status string, details ...interface{}) {
 	
 	msg += fmt.Sprintf(" status=%s", status)
 
+	// Add any extra details
+	for i := 0; i < len(details)-1; i += 2 {
+		if key, ok := details[i].(string); ok {
+			msg += fmt.Sprintf(" %s=%v", key, details[i+1])
+		}
+	}
+
 	accessLog.Println(msg)
 }
 
