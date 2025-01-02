@@ -38,37 +38,6 @@ Create a configuration file in JSON format. Example:
 | `access_cache_time` | How long to cache access.o data (seconds) |
 | `access_log_path` | Path to access log file |
 
-## Docker Usage
-
-The FTP server can be run in a Docker container. 
-
-- Mount your MUD root directory to `/mud` in the container
-- Mount your config file to `/etc/vkftpd/config.json`
-
-### Quick Start with Docker
-
-1. Create your configuration file based on the sample:
-```bash
-cp config.sample.json config.json
-```
-
-2. Run the container:
-```bash
-docker run -d \
-  --name viking-ftpd \
-  -p 2121:2121 \
-  -p 2122-2150:2122-2150 \
-  -v /usr/local/viking/mud/bin/vkftpd-config.json:/etc/vkftpd/config.json \
-  -v /usr/local/viking/mud/lib:/mud \
-  ghcr.io/your-username/viking-ftpd:latest
-```
-
-### Container File Structure
-
-Inside the container:
-- `/mud`: Maps to your MUD directory
-- `/etc/vkftpd/config.json`: Configuration file
-
 ## Package Overview
 
 | Package | Description |
