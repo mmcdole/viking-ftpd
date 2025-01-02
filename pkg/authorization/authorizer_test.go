@@ -55,9 +55,6 @@ func productionTree() map[string]interface{} {
 				},
 				"tmp": Write,
 			},
-			// Users with group memberships
-			"user1": map[string]interface{}{},
-			"user2": map[string]interface{}{},
 			// Documentation archwizard
 			"archwizard": map[string]interface{}{
 				"?": []interface{}{"Arch_doc"}, // Group membership
