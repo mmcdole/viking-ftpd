@@ -209,18 +209,18 @@ func (p *LineParser) parseValue() (interface{}, error) {
 	} else if r == 'n' {
 		// Try parsing nil
 		pos := p.pos
-		if p.match("nil") {
-			// Check that nil is followed by valid terminator
-			next := p.peek(0)
-			if next == ',' || next == ':' || next == ']' || next == '}' || next == ')' || next == '\n' || next == 0 {
-				return nil, nil
-			}
-			p.pos = pos
+		if p.match("nil") && p.isValidTerminator(p.peek(0)) {
+			return nil, nil
 		}
+		p.pos = pos
 		return nil, fmt.Errorf("invalid nil value at position %d", p.pos)
 	}
 
 	return nil, fmt.Errorf("invalid value starting with '%c' at position %d", r, p.pos)
+}
+
+func (p *LineParser) isValidTerminator(r rune) bool {
+	return r == ',' || r == ':' || r == ']' || r == '}' || r == ')' || r == '\n' || r == 0
 }
 
 // parseArray parses an array value.
@@ -246,25 +246,24 @@ func (p *LineParser) parseArray() ([]interface{}, error) {
 	// Parse elements
 	elements := make([]interface{}, 0)
 	
-	// Handle empty array case
+	// Handle empty array cases (with or without trailing comma)
 	p.skipSpaces()
 	if p.peek(0) == '}' && p.peek(1) == ')' {
 		p.pos += 2
 		if size != 0 {
-			return nil, fmt.Errorf("error in array: empty array but size is %d at position %d", size, p.pos)
+			return nil, fmt.Errorf("error in array: empty array but size is %d", size)
 		}
 		return elements, nil
 	}
-
-	// Handle empty array with trailing comma
 	if p.peek(0) == ',' && p.peek(1) == '}' && p.peek(2) == ')' {
 		p.pos += 3
 		if size != 0 {
-			return nil, fmt.Errorf("error in array: empty array but size is %d at position %d", size, p.pos)
+			return nil, fmt.Errorf("error in array: empty array but size is %d", size)
 		}
 		return elements, nil
 	}
 
+	// Parse elements
 	for {
 		// Parse element
 		element, err := p.parseValue()
@@ -325,37 +324,36 @@ func (p *LineParser) parseMap() (map[string]interface{}, error) {
 
 	// Parse entries
 	result := make(map[string]interface{})
-	var totalEntries int
-	var validEntries int
+	totalEntries := 0
+	validEntries := 0
 
-	// Handle empty map case
+	// Handle empty map
 	p.skipSpaces()
 	if p.peek(0) == ']' && p.peek(1) == ')' {
 		p.pos += 2
 		if size != 0 {
-			return nil, fmt.Errorf("error in map: empty map but size is %d at position %d", size, p.pos)
+			return nil, fmt.Errorf("error in map: empty map but size is %d", size)
 		}
 		return result, nil
 	}
 
 	for {
-		// Parse key and value
+		// Parse key:value pair
 		key, value, skipped, err := p.parseMapEntry()
 		if err != nil {
 			return nil, err
 		}
 
+		totalEntries++
 		if !skipped {
 			result[key] = value
 			validEntries++
 		}
-		totalEntries++
 
 		p.skipSpaces()
 		if p.peek(0) == ',' {
 			p.pos++ // consume comma
 			p.skipSpaces()
-			// Check for trailing comma
 			if p.peek(0) == ']' && p.peek(1) == ')' {
 				p.pos += 2
 				break
@@ -384,72 +382,21 @@ func (p *LineParser) parseMap() (map[string]interface{}, error) {
 	return result, nil
 }
 
-// ParseFloat parses a float value, optionally with hex notation.
-// Format: [-]digits[.digits][=hexdigits]
-// The hex part represents the IEEE 754 bits of the float.
-func (p *LineParser) parseFloat() (float64, error) {
-	start := p.pos
+var escapeSequences = map[rune]rune{
+	'0':  0,
+	'a':  '\a',
+	'b':  '\b',
+	't':  '\t',
+	'n':  '\n',
+	'v':  '\v',
+	'f':  '\f',
+	'r':  '\r',
+	'"':  '"',
+	'\\': '\\',
+}
 
-	if p.peek(0) == '-' {
-		p.next()
-	}
-
-	// Must have at least one digit
-	if !unicode.IsDigit(p.peek(0)) {
-		return 0, fmt.Errorf("float value must start with a digit at position %d", p.pos)
-	}
-
-	// Parse integer part
-	for unicode.IsDigit(p.peek(0)) {
-		p.next()
-	}
-
-	// Parse optional decimal part
-	if p.peek(0) == '.' {
-		p.next()
-		// Must have at least one digit after the decimal point
-		if !unicode.IsDigit(p.peek(0)) {
-			return 0, fmt.Errorf("float value must have digits after decimal point at position %d", p.pos)
-		}
-		for unicode.IsDigit(p.peek(0)) {
-			p.next()
-		}
-	}
-
-	// If no decimal point or hex notation, it must have hex notation
-	if p.peek(0) != '=' && !strings.Contains(p.s[start:p.pos], ".") {
-		return 0, fmt.Errorf("float value must contain a decimal point or hex representation at position %d", p.pos)
-	}
-
-	floatStr := p.s[start:p.pos]
-	result, err := strconv.ParseFloat(floatStr, 64)
-	if err != nil {
-		return 0, fmt.Errorf("error in float: invalid number at position %d", p.pos)
-	}
-
-	if p.peek(0) == '=' {
-		p.next() // skip =
-		foundHex := false
-		for {
-			r := p.peek(0)
-			if r == 0 {
-				break
-			}
-			isDigit := r >= '0' && r <= '9'
-			isLowerHex := r >= 'a' && r <= 'f'
-			isUpperHex := r >= 'A' && r <= 'F'
-			if !(isDigit || isLowerHex || isUpperHex) {
-				break
-			}
-			foundHex = true
-			p.next()
-		}
-		if !foundHex {
-			return 0, fmt.Errorf("invalid hex digits after = at position %d", p.pos)
-		}
-	}
-
-	return result, nil
+func isHexDigit(r rune) bool {
+	return (r >= '0' && r <= '9') || (r >= 'a' && r <= 'f') || (r >= 'A' && r <= 'F')
 }
 
 // ParseString parses a double-quoted string with escape sequences.
@@ -482,29 +429,10 @@ func (p *LineParser) parseString() (string, error) {
 				return "", fmt.Errorf("unterminated string at position %d", p.pos)
 			}
 			r = p.next()
-			switch r {
-			case '0':
-				b.WriteRune(0)
-			case 'a':
-				b.WriteRune('\a')
-			case 'b':
-				b.WriteRune('\b')
-			case 't':
-				b.WriteRune('\t')
-			case 'n':
-				b.WriteRune('\n')
-			case 'v':
-				b.WriteRune('\v')
-			case 'f':
-				b.WriteRune('\f')
-			case 'r':
-				b.WriteRune('\r')
-			case '"':
-				b.WriteRune('"')
-			case '\\':
-				b.WriteRune('\\')
-			default:
-				b.WriteRune(r)
+			if escaped, ok := escapeSequences[r]; ok {
+				b.WriteRune(escaped)
+			} else {
+				b.WriteRune(r) // Unknown escape sequences are taken literally
 			}
 			continue
 		}
@@ -591,24 +519,16 @@ func (p *LineParser) parseMapEntry() (string, interface{}, bool, error) {
 // Format: [-]digits[.digits][=hexdigits]
 func (p *LineParser) parseNumber() (interface{}, error) {
 	// Look ahead to see if this is a float
-	isFloat := false
 	offset := 0
 	if p.peek(offset) == '-' {
 		offset++
 	}
-	for unicode.IsDigit(p.peek(offset)) || p.peek(offset) == '.' {
-		if p.peek(offset) == '.' {
-			isFloat = true
-		}
+	// Skip digits
+	for unicode.IsDigit(p.peek(offset)) {
 		offset++
 	}
-
-	// If we have hex notation, treat it as a float
-	if p.peek(offset) == '=' {
-		return p.parseFloat()
-	}
-
-	if isFloat {
+	// Check for decimal point or hex notation
+	if p.peek(offset) == '.' || p.peek(offset) == '=' {
 		return p.parseFloat()
 	}
 	return p.parseInt()
@@ -679,4 +599,61 @@ func (p *LineParser) match(s string) bool {
 		return true
 	}
 	return false
+}
+
+// parseFloat parses a float value, optionally with hex notation.
+// Format: [-]digits[.digits][=hexdigits]
+// The hex part represents the IEEE 754 bits of the float.
+func (p *LineParser) parseFloat() (float64, error) {
+	start := p.pos
+
+	if p.peek(0) == '-' {
+		p.next()
+	}
+
+	// Must have at least one digit
+	if !unicode.IsDigit(p.peek(0)) {
+		return 0, fmt.Errorf("float value must start with a digit at position %d", p.pos)
+	}
+
+	// Parse integer part
+	for unicode.IsDigit(p.peek(0)) {
+		p.next()
+	}
+
+	// Parse optional decimal part
+	if p.peek(0) == '.' {
+		p.next()
+		// Must have at least one digit after the decimal point
+		if !unicode.IsDigit(p.peek(0)) {
+			return 0, fmt.Errorf("float value must have digits after decimal point at position %d", p.pos)
+		}
+		for unicode.IsDigit(p.peek(0)) {
+			p.next()
+		}
+	}
+
+	// If no decimal point or hex notation, it must have hex notation
+	if p.peek(0) != '=' && !strings.Contains(p.s[start:p.pos], ".") {
+		return 0, fmt.Errorf("float value must contain a decimal point or hex representation at position %d", p.pos)
+	}
+
+	floatStr := p.s[start:p.pos]
+	result, err := strconv.ParseFloat(floatStr, 64)
+	if err != nil {
+		return 0, fmt.Errorf("error in float: invalid number at position %d", p.pos)
+	}
+
+	// Parse optional hex part
+	if p.peek(0) == '=' {
+		p.next() // skip =
+		if !isHexDigit(p.peek(0)) {
+			return 0, fmt.Errorf("invalid hex digits after = at position %d", p.pos)
+		}
+		for isHexDigit(p.peek(0)) {
+			p.next()
+		}
+	}
+
+	return result, nil
 }
