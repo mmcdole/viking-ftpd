@@ -242,19 +242,12 @@ func (c *ftpClient) DeleteFile(name string) error {
 		return os.ErrPermission
 	}
 
-	// Get file size before deleting
-	info, err := c.fs.Stat(path)
-	var size int64
-	if err == nil {
-		size = info.Size()
-	}
-
 	if err := c.fs.Remove(path); err != nil {
 		logging.LogError("DELETE", err, "user", c.user, "path", path)
 		return err
 	}
 
-	logging.LogAccess("DELETE", c.user, path, "success", "size", size)
+	logging.LogAccess("DELETE", c.user, path, "success")
 	return nil
 }
 
@@ -297,14 +290,7 @@ func (c *ftpClient) Open(name string) (afero.File, error) {
 		return nil, err
 	}
 
-	// Get file size for logging
-	info, err := c.fs.Stat(path)
-	var size int64
-	if err == nil {
-		size = info.Size()
-	}
-
-	logging.LogAccess("DOWNLOAD", c.user, path, "success", "size", size)
+	logging.LogAccess("DOWNLOAD", c.user, path, "success")
 	return file, nil
 }
 
@@ -321,6 +307,8 @@ func (c *ftpClient) OpenFile(name string, flag int, perm os.FileMode) (afero.Fil
 			logging.LogAccess("UPLOAD", c.user, path, "denied")
 			return nil, os.ErrPermission
 		}
+		// For uploads, log success immediately since we know permission check passed
+		logging.LogAccess("UPLOAD", c.user, path, "success")
 	} else if !c.server.authorizer.GetEffectivePermission(c.user, path).CanRead() {
 		logging.LogAccess("DOWNLOAD", c.user, path, "denied")
 		return nil, os.ErrPermission
@@ -336,18 +324,7 @@ func (c *ftpClient) OpenFile(name string, flag int, perm os.FileMode) (afero.Fil
 		return nil, err
 	}
 
-	// Get file size for logging
-	info, err := c.fs.Stat(path)
-	var size int64
-	if err == nil {
-		size = info.Size()
-	}
-
-	operation := "UPLOAD"
-	if flag&(os.O_WRONLY|os.O_RDWR|os.O_APPEND|os.O_CREATE|os.O_TRUNC) == 0 {
-		operation = "DOWNLOAD"
-	}
-	logging.LogAccess(operation, c.user, path, "success", "size", size)
+	logging.LogAccess("DOWNLOAD", c.user, path, "success")
 	return file, nil
 }
 
