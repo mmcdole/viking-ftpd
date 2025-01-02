@@ -55,14 +55,12 @@ func LogAccess(operation, user, path, status string, details ...interface{}) {
 	}
 
 	timestamp := time.Now().Format("2006-01-02 15:04:05")
-	msg := fmt.Sprintf("[%s] user=%s operation=%s", timestamp, user, operation)
+	msg := fmt.Sprintf("[%s] operation=%s status=%s user=%s", timestamp, operation, status, user)
 	
 	if path != "" {
 		msg += fmt.Sprintf(" path=%s", path)
 	}
 	
-	msg += fmt.Sprintf(" status=%s", status)
-
 	// Add any extra details
 	for i := 0; i < len(details)-1; i += 2 {
 		if key, ok := details[i].(string); ok {
