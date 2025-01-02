@@ -1,6 +1,6 @@
 # VikingMUD FTP Daemon
 
-A custom FTP server designed specifically for VikingMUD, providing secure file access with native integration into the MUD's [player authentication](docs/player_authentication.md) and hiearchical [authorization system](docs/viking_access_tree.md). This daemon understands [LPC serialized object format](https://github.com/mmcdole/viking-ftpd/blob/main/docs/lpc_object_format.md) and directly interfaces with the MUD's character database and access control trees.
+A custom FTP server designed specifically for [VikingMUD](https://www.vikingmud.org), providing secure file access with native integration into the MUD's [player authentication](docs/player_authentication.md) and hiearchical [authorization system](docs/viking_access_tree.md). This daemon understands [LPC serialized object format](https://github.com/mmcdole/viking-ftpd/blob/main/docs/lpc_object_format.md) and directly interfaces with the MUD's character database and access control trees.
 
 ## Configuration
 
