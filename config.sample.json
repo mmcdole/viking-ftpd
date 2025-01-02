@@ -1,0 +1,14 @@
+{
+    "listen_addr": "0.0.0.0",
+    "port": 21,
+    "ftp_root_dir": "/mud",
+    "home_pattern": "characters/%s",
+    "character_dir_path": "/mud/characters",
+    "access_file_path": "/mud/dgd/sys/data/access.o",
+    "access_log_path": "/mud/log/vkftpd-access.log",
+    "passive_port_range": [2121, 2130],
+    "max_connections": 100,
+    "idle_timeout": 300,
+    "character_cache_time": 60,
+    "access_cache_time": 60
+}
