@@ -1,6 +1,6 @@
 # VikingMUD FTP Daemon
 
-A custom FTP server designed specifically for VikingMUD, providing secure file access with native integration into the MUD's authentication and [hierarchical authorization system](docs/viking_access_tree.md). This daemon understands LPC object serialization and directly interfaces with the MUD's character database and access control trees.
+A custom FTP server designed specifically for VikingMUD, providing secure file access with native integration into the MUD's authentication and hiearchical [authorization system](docs/viking_access_tree.md). This daemon understands [LPC serialized object format](https://github.com/mmcdole/viking-ftpd/blob/main/docs/lpc_object_format.md) and directly interfaces with the MUD's character database and access control trees.
 
 ## Configuration
 
@@ -45,7 +45,7 @@ Create a configuration file in JSON format. Example:
 | `authentication` | Interfaces with VikingMUD's character database to validate user credentials. Reads player files and verifies password hashes using the MUD's native format. Character data is cached to reduce filesystem load. |
 | `authorization` | Implements permission checking by parsing the MUD's `access.o` object tree. Validates user access rights against the MUD's [hierarchical permission system](docs/viking_access_tree.md). The access tree is cached to reduce filesystem reads. |
 | `ftpserver` | Core FTP server implementation built on [ftpserverlib](https://github.com/fclairamb/ftpserverlib). Handles FTP protocol operations while integrating with MUD-specific authentication and authorization. |
-| `lpc` | Parses LPC (Lars Pensjo C) serialized object format used by LPMuds. Enables direct reading of MUD's data structures like the access control tree. |
+| `lpc` | Parses [LPC (Lars Pensjo C) serialized object format](https://github.com/mmcdole/viking-ftpd/blob/main/docs/lpc_object_format.md) used by LPMuds. Enables direct reading of MUD's data structures like the access control tree. |
 | `logging` | Provides structured logging for FTP operations with configurable output paths. Logs include operation type, status, user, and affected paths. |
 
 ## Building and Running
@@ -53,3 +53,5 @@ Create a configuration file in JSON format. Example:
 ```bash
 go build
 ./viking-ftpd -config config.json
+
+``` 
