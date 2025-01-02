@@ -22,7 +22,7 @@ While being called an 'access map', it is actually a collection of 'access trees
 <name>      ::= String
 ```
 
-A "." node defines a specific access level for the subtree it belongs to.
+A "`.`" node defines a specific access level for the subtree it belongs to.
 
 A "`*`" node defines a default access level for all nodes at this branch point (and below), unless a specific access level is defined for a node at this branch point or lower.
 
@@ -69,14 +69,14 @@ This means that the following paths have the specified access levels:
 - `/players/frogo/workroom.c` REVOKED  
   The actual contents of /players/frogo cannot be read, because of line (12).
 
-This shows how "." and "`*`" are very different. The "." access level really affects the subtree root, whereas "`*`" affects the primary nodes of the subtree. The "." pseudo-node was introduced to handle the following special access case:
+This shows how "`.`" and "`*`" are very different. The "`.`" access level really affects the subtree root, whereas "`*`" affects the primary nodes of the subtree. The "`.`" pseudo-node was introduced to handle the following special access case:
 
-1. User 'foo' has no access to any subdirectory of /players, by means of a '"*": REVOKED' element in the /players access specification.
+1. User 'foo' has no access to any subdirectory of /players, by means of a '"`*`": REVOKED' element in the /players access specification.
 2. User 'foo' has read access to /players/frogo, reflected in the access tree with:
    ```
    "": ([ "players": ([ "*": REVOKED, "frogo": READ ]) ])
    ```
-3. Frogo decides to give user 'foo' write access to /players/com. This would require an entry '"frogo": ([ "*": READ, "com": WRITE ])' to replace '"frogo": READ', but then the contents of /players/frogo is no longer visible in ls, because the access level of /players/frogo will be derived from the '"*": REVOKED' element to /players.
+3. Frogo decides to give user 'foo' write access to /players/com. This would require an entry '"frogo": ([ "*": READ, "com": WRITE ])' to replace '"frogo": READ', but then the contents of /players/frogo is no longer visible in ls, because the access level of /players/frogo will be derived from the '"`*`": REVOKED' element to /players.
 
 To resolve this, the access tree will be rewritten as:
 ```
@@ -95,4 +95,4 @@ The following trees can be present in the access map:
 
 - All trees for entities that start with a lower case letter are access trees for specific players in the MUD.
 
-- Trees for players can have a special root node, named "?". This node (if present) must have an array as value, specifying access groups that the player belongs to. Evaluating access for a given pathname uses a lazy evaluator algorithm, meaning that the first match is used as the access level. First the player's access tree is consulted. Then the group access trees, in order as they are specified in the "?" node value (if present). Finally, the "`*`" access tree is used.
+- Trees for players can have a special root node, named "`?`". This node (if present) must have an array as value, specifying access groups that the player belongs to. Evaluating access for a given pathname uses a lazy evaluator algorithm, meaning that the first match is used as the access level. First the player's access tree is consulted. Then the group access trees, in order as they are specified in the "`?`" node value (if present). Finally, the "`*`" access tree is used.
