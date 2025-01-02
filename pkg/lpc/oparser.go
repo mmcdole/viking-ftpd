@@ -399,71 +399,15 @@ func isHexDigit(r rune) bool {
 	return (r >= '0' && r <= '9') || (r >= 'a' && r <= 'f') || (r >= 'A' && r <= 'F')
 }
 
-// ParseString parses a double-quoted string with escape sequences.
-// Supported escape sequences:
-// - \0  - null character
-// - \a  - bell (BEL)
-// - \b  - backspace
-// - \t  - tab
-// - \n  - newline
-// - \v  - vertical tab
-// - \f  - form feed
-// - \r  - carriage return
-// - \"  - double quote
-// - \\  - backslash
-// Any other character after backslash is taken literally.
-// Newlines are not allowed in strings.
-func (p *LineParser) parseString() (string, error) {
-	if !p.match("\"") {
-		return "", fmt.Errorf("expected '\"' at position %d", p.pos)
-	}
-
-	var b strings.Builder
-	for p.pos < len(p.s) {
-		r := p.next()
-		if r == '"' {
-			return b.String(), nil
-		}
-		if r == '\\' {
-			if p.pos >= len(p.s) {
-				return "", fmt.Errorf("unterminated string at position %d", p.pos)
-			}
-			r = p.next()
-			if escaped, ok := escapeSequences[r]; ok {
-				b.WriteRune(escaped)
-			} else {
-				b.WriteRune(r) // Unknown escape sequences are taken literally
-			}
-			continue
-		}
-		if r == '\n' {
-			return "", fmt.Errorf("newline in string at position %d", p.pos)
-		}
-		b.WriteRune(r)
-	}
-	return "", fmt.Errorf("unterminated string at position %d", p.pos)
-}
-
-// ParseIdentifier parses an identifier from the input string.
-// An identifier consists of letters, digits, and underscores.
-// The first character must be a letter.
-func (p *LineParser) parseIdentifier() (string, error) {
-	start := p.pos
-	r := p.next()
-	if !unicode.IsLetter(r) {
-		return "", fmt.Errorf("identifier must start with a letter at position %d", p.pos)
-	}
-	for r = p.next(); unicode.IsLetter(r) || unicode.IsDigit(r) || r == '_'; r = p.next() {
-		if r == 0 {
-			return "", fmt.Errorf("unexpected end of input while parsing identifier at position %d", p.pos)
-		}
-	}
-	p.pos -= p.w // back up to last character of identifier
-	return p.s[start:p.pos], nil
-}
-
 // ParseMapEntry parses a single key:value pair in a mapping.
-// Keys can be any valid value type.
+// While the LPC Object Format specification allows any valid value type as keys,
+// this implementation only supports primitive types (strings, numbers, and nil) as keys.
+// Complex types (arrays and maps) as keys will be skipped during parsing.
+// Keys can be:
+// - Strings
+// - Integers
+// - Floats
+// - nil
 // Values can be any valid value type.
 func (p *LineParser) parseMapEntry() (string, interface{}, bool, error) {
 	p.skipSpaces()
@@ -656,4 +600,67 @@ func (p *LineParser) parseFloat() (float64, error) {
 	}
 
 	return result, nil
+}
+
+// ParseString parses a double-quoted string with escape sequences.
+// Supported escape sequences:
+// - \0  - null character
+// - \a  - bell (BEL)
+// - \b  - backspace
+// - \t  - tab
+// - \n  - newline
+// - \v  - vertical tab
+// - \f  - form feed
+// - \r  - carriage return
+// - \"  - double quote
+// - \\  - backslash
+// Any other character after backslash is taken literally.
+// Newlines are not allowed in strings.
+func (p *LineParser) parseString() (string, error) {
+	if !p.match("\"") {
+		return "", fmt.Errorf("expected '\"' at position %d", p.pos)
+	}
+
+	var b strings.Builder
+	for p.pos < len(p.s) {
+		r := p.next()
+		if r == '"' {
+			return b.String(), nil
+		}
+		if r == '\\' {
+			if p.pos >= len(p.s) {
+				return "", fmt.Errorf("unterminated string at position %d", p.pos)
+			}
+			r = p.next()
+			if escaped, ok := escapeSequences[r]; ok {
+				b.WriteRune(escaped)
+			} else {
+				b.WriteRune(r) // Unknown escape sequences are taken literally
+			}
+			continue
+		}
+		if r == '\n' {
+			return "", fmt.Errorf("newline in string at position %d", p.pos)
+		}
+		b.WriteRune(r)
+	}
+	return "", fmt.Errorf("unterminated string at position %d", p.pos)
+}
+
+// ParseIdentifier parses an identifier from the input string.
+// An identifier consists of letters, digits, and underscores.
+// The first character must be a letter.
+func (p *LineParser) parseIdentifier() (string, error) {
+	start := p.pos
+	r := p.next()
+	if !unicode.IsLetter(r) {
+		return "", fmt.Errorf("identifier must start with a letter at position %d", p.pos)
+	}
+	for r = p.next(); unicode.IsLetter(r) || unicode.IsDigit(r) || r == '_'; r = p.next() {
+		if r == 0 {
+			return "", fmt.Errorf("unexpected end of input while parsing identifier at position %d", p.pos)
+		}
+	}
+	p.pos -= p.w // back up to last character of identifier
+	return p.s[start:p.pos], nil
 }
