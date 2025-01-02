@@ -33,16 +33,16 @@ The config file should be in JSON format with the following structure:
 {
     "listen_addr": "0.0.0.0",          // Address to listen on
     "port": 2121,                      // Port to listen on
-    "ftp_root_dir": "./root",          // Root directory for FTP access
-    "character_dir_path": "./chars",    // Path to character save files
-    "access_file_path": "./access.o",   // Path to MUD's access.o
+    "ftp_root_dir": "/mud/lib",          // Root directory for FTP access
+    "character_dir_path": "/mud/lib/characters",    // Path to character save files
+    "access_file_path": "/mud/lib/dgd/sys/data/access.o",   // Path to MUD's access.o
     "passive_port_range": [2122,2150],  // Range for passive mode
     "max_connections": 10,              // Max concurrent connections
     "idle_timeout": 300,                // Idle timeout in seconds
     "character_cache_time": 60,         // How long to cache character data
     "access_cache_time": 60,            // How long to cache access permissions
     "home_pattern": "players/%s",       // Home directory pattern (%s = username)
-    "access_log_path": "./vkftpd-access.log"  // Optional: Path to access log file
+    "access_log_path": "/mud/lib/log/vkftpd-access.log"  // Optional: Path to access log file
 }
 
 Paths in the config file can be relative to the config file location.

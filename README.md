@@ -4,45 +4,44 @@ A custom FTP server designed specifically for VikingMUD, providing secure file a
 
 ## Configuration
 
-The server is configured via a JSON file. Example configuration:
+Create a configuration file in JSON format. Example:
 
 ```json
 {
-  "listen_addr": "0.0.0.0",
-  "port": 2121,
-  "ftp_root_dir": "/mud",
-  "character_dir_path": "/mud/characters",
-  "access_file_path": "/mud/dgd/sys/data/access.o",
-  "home_pattern": "characters/%s",
-  "passive_port_range": [2122, 2150],
-  "max_connections": 10,
-  "idle_timeout": 300,
-  "character_cache_time": 60,
-  "access_cache_time": 60,
-  "access_log_path": "/mud/log/vkftpd-access.log"
+    "listen_addr": "0.0.0.0",
+    "port": 2121,
+    "ftp_root_dir": "/mud/lib",
+    "character_dir_path": "/mud/lib/characters",
+    "access_file_path": "/mud/lib/dgd/sys/data/access.o",
+    "home_pattern": "players/%s",
+    "passive_port_range": [2122, 2150],
+    "max_connections": 10,
+    "idle_timeout": 300,
+    "character_cache_time": 60,
+    "access_cache_time": 60,
+    "access_log_path": "/mud/lib/log/vkftpd-access.log"
 }
 ```
 
-### Configuration Options
-
-| Option | Description |
-|--------|------------|
-| `listen_addr` | Network address to listen on |
-| `port` | Port to listen on |
-| `ftp_root_dir` | Root directory of the MUD |
-| `character_dir_path` | Path to character files |
-| `access_file_path` | Path to access.o file |
-| `home_pattern` | Pattern for user home directories (uses %s for username) |
-| `passive_port_range` | Port range for passive mode transfers [start, end] |
-| `max_connections` | Maximum number of concurrent connections |
-| `idle_timeout` | Connection timeout in seconds |
+| Setting | Description |
+|---------|-------------|
+| `listen_addr` | Address to listen on (e.g., "0.0.0.0" for all interfaces) |
+| `port` | Port to listen on (e.g., 2121) |
+| `ftp_root_dir` | Root directory for FTP access |
+| `character_dir_path` | Path to character files directory |
+| `access_file_path` | Path to the MUD's access.o file |
+| `home_pattern` | Pattern for user home directories (e.g., "players/%s") |
+| `passive_port_range` | Range of ports for passive mode |
+| `max_connections` | Maximum concurrent connections |
+| `idle_timeout` | Connection idle timeout in seconds |
 | `character_cache_time` | How long to cache character data (seconds) |
 | `access_cache_time` | How long to cache access.o data (seconds) |
 | `access_log_path` | Path to access log file |
 
 ## Docker Usage
 
-The FTP server can be run in a Docker container. The container primarily needs access to your MUD directory structure:
+The FTP server can be run in a Docker container. 
+
 - Mount your MUD root directory to `/mud` in the container
 - Mount your config file to `/etc/vkftpd/config.json`
 
@@ -53,61 +52,22 @@ The FTP server can be run in a Docker container. The container primarily needs a
 cp config.sample.json config.json
 ```
 
-2. Edit the config.json to match your MUD's directory structure. For example, if your MUD has this structure:
-```
-/mud/
-  ├── characters/
-  │   └── character_files...
-  ├── dgd/sys/data/
-  │   └── access.o
-  └── log/
-      └── vkftpd-access.log
-```
-
-Your config.json should look like:
-```json
-{
-    "listen_addr": "",
-    "port": 21,
-    "ftp_root_dir": "/mud",
-    "home_pattern": "characters/%s",
-    "character_dir_path": "/mud/characters",
-    "access_file_path": "/mud/dgd/sys/data/access.o",
-    "access_log_path": "/mud/log/vkftpd-access.log",
-    "passive_port_range": [2121, 2130],
-    "max_connections": 100,
-    "idle_timeout": 300,
-    "character_cache_time": 300,
-    "access_cache_time": 300
-}
-```
-
-3. Run the container:
+2. Run the container:
 ```bash
 docker run -d \
   --name viking-ftpd \
-  -p 21:21 \
-  -p 2121-2130:2121-2130 \
-  -v $(pwd)/config.json:/etc/vkftpd/config.json \
-  -v /path/to/mud:/mud \
+  -p 2121:2121 \
+  -p 2122-2150:2122-2150 \
+  -v /usr/local/viking/mud/bin/vkftpd-config.json:/etc/vkftpd/config.json \
+  -v /usr/local/viking/mud/lib:/mud \
   ghcr.io/your-username/viking-ftpd:latest
 ```
-
-Note: Replace `/path/to/mud` with the actual path to your MUD's root directory. All paths in config.json are relative to the container's `/mud` directory.
 
 ### Container File Structure
 
 Inside the container:
-- `/mud`: Your MUD root directory containing:
-  - `/mud/characters`: Character files
-  - `/mud/dgd/sys/data`: System data including access.o
-  - `/mud/log`: Log files
+- `/mud`: Maps to your MUD directory
 - `/etc/vkftpd/config.json`: Configuration file
-
-For example:
-- If your MUD's access.o is at `/home/mud/game/dgd/sys/data/access.o` locally
-- And you mount `/home/mud/game` to `/mud`
-- Then in config.json, use `/mud/dgd/sys/data/access.o` as the access_file_path
 
 ## Package Overview
 
