@@ -1,29 +1,44 @@
-# Viking FTP Daemon
+# VikingMUD FTP Daemon
 
 A custom FTP server designed specifically for VikingMUD, providing secure file access with native integration into the MUD's authentication and authorization systems. This daemon understands LPC object serialization and directly interfaces with the MUD's character database and access control trees.
 
 ## Configuration
 
-The server is configured via a JSON file. Here's the format with available options:
+The server is configured via a JSON file. Example configuration:
 
 ```json
 {
-  "listen_addr": "0.0.0.0",           // Address to listen on
-  "port": 2121,                       // Port to listen on
-  "ftp_root_dir": "/usr/local/viking/mud/lib",          // Root directory of the MUD
-  "character_dir_path": "/usr/local/viking/mud/lib/characters",  // Path to character files
-  "access_file_path": "/usr/local/viking/mud/lib/dgd/sys/data/access.o",  // Path to access.o
-  "home_pattern": "players/%s",        // Pattern for user home directories
-  "passive_port_range": [             // Port range for passive mode transfers
-    2122,                             // Start of range
-    2150                              // End of range
-  ],
-  "max_connections": 10,              // Maximum concurrent connections
-  "idle_timeout": 300,                // Connection timeout in seconds
-  "character_cache_time": 60,         // How long to cache character data (seconds)
-  "access_cache_time": 60,            // How long to cache access.o data (seconds)
-  "access_log_path": "/usr/local/viking/mud/lib/log/vkftpd-access.log"  // Path to access log
+  "listen_addr": "0.0.0.0",
+  "port": 2121,
+  "ftp_root_dir": "/usr/local/viking/mud/lib",
+  "character_dir_path": "/usr/local/viking/mud/lib/characters",
+  "access_file_path": "/usr/local/viking/mud/lib/dgd/sys/data/access.o",
+  "home_pattern": "players/%s",
+  "passive_port_range": [2122, 2150],
+  "max_connections": 10,
+  "idle_timeout": 300,
+  "character_cache_time": 60,
+  "access_cache_time": 60,
+  "access_log_path": "/usr/local/viking/mud/lib/log/vkftpd-access.log"
 }
+```
+
+### Configuration Options
+
+| Option | Description |
+|--------|------------|
+| `listen_addr` | Network address to listen on |
+| `port` | Port to listen on |
+| `ftp_root_dir` | Root directory of the MUD |
+| `character_dir_path` | Path to character files |
+| `access_file_path` | Path to access.o file |
+| `home_pattern` | Pattern for user home directories (uses %s for username) |
+| `passive_port_range` | Port range for passive mode transfers [start, end] |
+| `max_connections` | Maximum number of concurrent connections |
+| `idle_timeout` | Connection timeout in seconds |
+| `character_cache_time` | How long to cache character data (seconds) |
+| `access_cache_time` | How long to cache access.o data (seconds) |
+| `access_log_path` | Path to access log file |
 
 ## Package Overview
 
