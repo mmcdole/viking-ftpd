@@ -1,4 +1,8 @@
-# Viking Access Tree
+# VikingMUD Access Tree
+
+> **Copyright Notice**  
+> Copyright (C) 1995-2010 by Kris Van Hees, Belgium. All rights reserved.  
+> 2006-2010 (modified) by Arvid Berdahl, Norway.
 
 The (in)famous access map.
 
