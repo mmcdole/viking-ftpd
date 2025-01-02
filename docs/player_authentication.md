@@ -21,9 +21,7 @@ Each character's data is stored in a `.o` file named after their username (e.g.,
 
 ## File Format
 
-Character files are stored in the LPC object format. The file contains various fields describing the character's attributes and settings. For authentication purposes, the most important field is:
-
-- `password`: Contains the character's password hash using Unix crypt format
+Character files are stored in the [LPC object format](lpc_object_format.md). The file contains various fields describing the character's attributes and settings. These files are parsed using the `pkg/lpc/oparser` package which implements a non-strict LPC object parser.
 
 Example character file:
 ```
@@ -39,6 +37,10 @@ Dex 29
 experience 990147374
 ...
 ```
+
+For authentication purposes, the most important field is:
+
+- `password`: Contains the character's password hash using Unix crypt format
 
 ### Password Hashing
 
