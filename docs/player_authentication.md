@@ -25,14 +25,29 @@ Character files are stored in the LPC object format. The file contains various f
 
 - `password`: Contains the character's password hash using Unix crypt format
 
+Example character file:
+```
+name "drake"
+cap_name "Drake"
+password "tek4edTZE898g"
+level 45
+gender 1
+Str 29
+Int 29
+Con 29
+Dex 29
+experience 990147374
+...
+```
+
 ### Password Hashing
 
-Passwords are hashed using the traditional Unix crypt algorithm with the following characteristics:
+Passwords are hashed using the [DES-based Unix crypt(3)](https://en.wikipedia.org/wiki/Crypt_(C)) algorithm with the following characteristics:
 
 - Uses the first two characters of the password as the salt
-- Produces a 13-character hash string
+- Produces a 13-character hash string using a modified version of DES
 - The first two characters of the hash are the salt used
-- Compatible with the standard Unix `crypt(3)` function
+- Compatible with the standard Unix `crypt(3)` function from libc
 
 Example hash format: `XXyyyyyyyyyyy` where:
 - `XX`: The two-character salt
