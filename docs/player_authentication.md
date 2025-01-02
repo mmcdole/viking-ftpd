@@ -1,6 +1,6 @@
 # Player Authentication in VikingMUD
 
-VikingMUD stores player data in [LPC object files](lpc_object_format.md) organized in a directory structure. This document describes how player authentication works and the format of the character files that store credentials.
+VikingMUD stores player data in character files which are organized in a directory structure. This document describes how player authentication works and the format of the character files that store credentials.
 
 ## Directory Structure
 
