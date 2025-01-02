@@ -1,0 +1,72 @@
+name: CI/CD
+
+on:
+  push:
+    branches: [ main ]
+    tags: [ 'v*' ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.21'
+
+    - name: Test
+      run: go test -v ./...
+
+  build:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.21'
+
+    - name: Build
+      run: go build -v ./cmd/vkftpd
+
+    - name: Upload artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: vkftpd
+        path: vkftpd
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.21'
+
+    - name: Build release binaries
+      run: |
+        GOOS=linux GOARCH=amd64 go build -o vkftpd-linux-amd64 ./cmd/vkftpd
+        GOOS=darwin GOARCH=amd64 go build -o vkftpd-darwin-amd64 ./cmd/vkftpd
+        GOOS=darwin GOARCH=arm64 go build -o vkftpd-darwin-arm64 ./cmd/vkftpd
+        GOOS=windows GOARCH=amd64 go build -o vkftpd-windows-amd64.exe ./cmd/vkftpd
+
+    - name: Create Release
+      uses: softprops/action-gh-release@v1
+      with:
+        files: |
+          vkftpd-linux-amd64
+          vkftpd-darwin-amd64
+          vkftpd-darwin-arm64
+          vkftpd-windows-amd64.exe
+        generate_release_notes: true
