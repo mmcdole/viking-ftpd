@@ -84,12 +84,13 @@ func (d *ftpDriver) GetSettings() (*ftpserverlib.Settings, error) {
 
 // ClientConnected is called when a client connects
 func (d *ftpDriver) ClientConnected(cc ftpserverlib.ClientContext) (string, error) {
+	logging.LogConnect(cc.RemoteAddr().String(), nil)
 	return "Welcome to Viking FTP server", nil
 }
 
 // ClientDisconnected is called when a client disconnects
 func (d *ftpDriver) ClientDisconnected(cc ftpserverlib.ClientContext) {
-	// Nothing to do
+	logging.LogDisconnect(cc.RemoteAddr().String(), "Client disconnected")
 }
 
 // AuthUser authenticates the user and returns a ClientDriver
@@ -275,17 +276,22 @@ func (c *ftpClient) Open(name string) (afero.File, error) {
 	}
 
 	if !c.server.authorizer.GetEffectivePermission(c.user, path).CanRead() {
-		logging.LogOpen(c.user, path, logging.ModeRead, os.ErrPermission)
+		logging.LogOpen(c.user, path, logging.ModeRead, 0, os.ErrPermission)
 		return nil, os.ErrPermission
 	}
 
 	file, err := c.fs.Open(path)
 	if err != nil {
-		logging.LogOpen(c.user, path, logging.ModeRead, err)
+		logging.LogOpen(c.user, path, logging.ModeRead, 0, err)
 		return nil, err
 	}
 
-	logging.LogOpen(c.user, path, logging.ModeRead, nil)
+	// Get file size for logging
+	if fi, err := file.Stat(); err == nil {
+		logging.LogOpen(c.user, path, logging.ModeRead, fi.Size(), nil)
+	} else {
+		logging.LogOpen(c.user, path, logging.ModeRead, 0, nil)
+	}
 	return file, nil
 }
 
@@ -299,28 +305,32 @@ func (c *ftpClient) OpenFile(name string, flag int, perm os.FileMode) (afero.Fil
 	// Check write permission if file is being created or modified
 	if flag&(os.O_WRONLY|os.O_RDWR|os.O_APPEND|os.O_CREATE|os.O_TRUNC) != 0 {
 		if !c.server.authorizer.GetEffectivePermission(c.user, path).CanWrite() {
-			logging.LogOpen(c.user, path, logging.ModeWrite, os.ErrPermission)
+			logging.LogOpen(c.user, path, logging.ModeWrite, 0, os.ErrPermission)
 			return nil, os.ErrPermission
 		}
-		// For uploads, log success immediately since we know permission check passed
-		logging.LogOpen(c.user, path, logging.ModeWrite, nil)
+		logging.LogOpen(c.user, path, logging.ModeWrite, 0, nil)
 	} else if !c.server.authorizer.GetEffectivePermission(c.user, path).CanRead() {
-		logging.LogOpen(c.user, path, logging.ModeRead, os.ErrPermission)
+		logging.LogOpen(c.user, path, logging.ModeRead, 0, os.ErrPermission)
 		return nil, os.ErrPermission
 	}
 
 	file, err := c.fs.OpenFile(path, flag, perm)
 	if err != nil {
 		if flag&(os.O_WRONLY|os.O_RDWR|os.O_APPEND|os.O_CREATE|os.O_TRUNC) != 0 {
-			logging.LogOpen(c.user, path, logging.ModeWrite, err)
+			logging.LogOpen(c.user, path, logging.ModeWrite, 0, err)
 		} else {
-			logging.LogOpen(c.user, path, logging.ModeRead, err)
+			logging.LogOpen(c.user, path, logging.ModeRead, 0, err)
 		}
 		return nil, err
 	}
 
+	// Only log size for read operations
 	if flag&(os.O_WRONLY|os.O_RDWR|os.O_APPEND|os.O_CREATE|os.O_TRUNC) == 0 {
-		logging.LogOpen(c.user, path, logging.ModeRead, nil)
+		if fi, err := file.Stat(); err == nil {
+			logging.LogOpen(c.user, path, logging.ModeRead, fi.Size(), nil)
+		} else {
+			logging.LogOpen(c.user, path, logging.ModeRead, 0, nil)
+		}
 	}
 	return file, nil
 }

@@ -15,14 +15,16 @@ import (
 type Operation string
 
 const (
-	OpOpen    Operation = "OPEN"    // Opening a file for reading
-	OpCreate  Operation = "CREATE"  // Creating or opening a file for writing
-	OpMkdir   Operation = "MKDIR"   // Creating a directory
-	OpRemove  Operation = "REMOVE"  // Removing a file or directory
-	OpDelete  Operation = "DELETE"  // Deleting a file or directory
-	OpRename  Operation = "RENAME"  // Renaming a file or directory
-	OpReadDir Operation = "READDIR" // Reading directory contents
-	OpAuth    Operation = "AUTH"    // Authentication attempt
+	OpOpen       Operation = "OPEN"       // Opening a file for reading
+	OpCreate     Operation = "CREATE"     // Creating or opening a file for writing
+	OpMkdir      Operation = "MKDIR"      // Creating a directory
+	OpRemove     Operation = "REMOVE"     // Removing a file or directory
+	OpDelete     Operation = "DELETE"     // Deleting a file or directory
+	OpRename     Operation = "RENAME"     // Renaming a file or directory
+	OpReadDir    Operation = "READDIR"    // Reading directory contents
+	OpAuth       Operation = "AUTH"       // Authentication attempt
+	OpConnect    Operation = "CONNECT"    // Client connection
+	OpDisconnect Operation = "DISCONNECT" // Client disconnection
 )
 
 // Mode represents file access mode
@@ -42,7 +44,9 @@ type Entry struct {
 	FromPath  string    // For rename operations
 	ToPath    string    // For rename operations
 	Entries   int       // For readdir operations
-	IP        string    // For auth operations
+	IP        string    // For auth/connect operations
+	Size      int64     // For file operations
+	Reason    string    // For disconnect operations
 	Error     error
 	Time      time.Time
 }
@@ -95,37 +99,54 @@ func New(config Config) (*Logger, error) {
 func formatMessage(e Entry) string {
 	var msg strings.Builder
 
-	// Time and operation (left-padded to 7 chars)
-	msg.WriteString(fmt.Sprintf("%s %-7s", e.Time.Format("2006-01-02 15:04:05"), e.Operation))
+	// Time and operation (left-padded to 8 chars)
+	msg.WriteString(fmt.Sprintf("%s %-8s", e.Time.Format("2006-01-02 15:04:05"), e.Operation))
 
-	// User
-	msg.WriteString(fmt.Sprintf(" User: '%s'", e.User))
-
-	// Path (for most operations)
-	if e.Path != "" && e.Operation != OpRename {
-		msg.WriteString(fmt.Sprintf(" Path: '%s'", e.Path))
+	// User if present
+	if e.User != "" {
+		msg.WriteString(fmt.Sprintf("User: '%s' ", e.User))
 	}
 
-	// Mode (only for OPEN)
-	if e.Operation == OpOpen && e.Mode != "" {
-		msg.WriteString(fmt.Sprintf(" Mode: %s", e.Mode))
+	// Path if present
+	if e.Path != "" {
+		msg.WriteString(fmt.Sprintf("Path: '%s' ", e.Path))
 	}
 
-	// Special fields for specific operations
-	switch e.Operation {
-	case OpRename:
-		msg.WriteString(fmt.Sprintf(" From: '%s' To: '%s'", e.FromPath, e.ToPath))
-	case OpReadDir:
-		msg.WriteString(fmt.Sprintf(" Entries: %d", e.Entries))
-	case OpAuth:
-		msg.WriteString(fmt.Sprintf(" IP: '%s'", e.IP))
+	// Mode if present
+	if e.Mode != "" {
+		msg.WriteString(fmt.Sprintf("Mode: %s ", e.Mode))
 	}
 
-	// Status
+	// Size if present and non-zero
+	if e.Size > 0 {
+		msg.WriteString(fmt.Sprintf("Size: %d bytes ", e.Size))
+	}
+
+	// IP if present
+	if e.IP != "" {
+		msg.WriteString(fmt.Sprintf("IP: '%s' ", e.IP))
+	}
+
+	// Reason if present
+	if e.Reason != "" {
+		msg.WriteString(fmt.Sprintf("Reason: '%s' ", e.Reason))
+	}
+
+	// FromPath and ToPath for rename operations
+	if e.FromPath != "" && e.ToPath != "" {
+		msg.WriteString(fmt.Sprintf("From: '%s' To: '%s' ", e.FromPath, e.ToPath))
+	}
+
+	// Number of entries for readdir operations
+	if e.Entries > 0 {
+		msg.WriteString(fmt.Sprintf("Entries: %d ", e.Entries))
+	}
+
+	// Error or success
 	if e.Error != nil {
-		msg.WriteString(fmt.Sprintf(" [FAILURE] Error: %s", e.Error))
+		msg.WriteString(fmt.Sprintf("[FAILURE: %s]", e.Error))
 	} else {
-		msg.WriteString(" [SUCCESS]")
+		msg.WriteString("[SUCCESS]")
 	}
 
 	return msg.String()
@@ -145,13 +166,15 @@ func (l *Logger) Log(e Entry) {
 }
 
 // LogOpen logs file open operations
-func (l *Logger) LogOpen(user, path string, mode Mode, err error) {
+func (l *Logger) LogOpen(user, path string, mode Mode, size int64, err error) {
 	l.Log(Entry{
 		Operation: OpOpen,
 		User:      user,
 		Path:      path,
 		Mode:      mode,
+		Size:      size,
 		Error:     err,
+		Time:      time.Now(),
 	})
 }
 
@@ -228,6 +251,26 @@ func (l *Logger) LogAuth(user, ip string, err error) {
 	})
 }
 
+// LogConnect logs client connection
+func (l *Logger) LogConnect(ip string, err error) {
+	l.Log(Entry{
+		Operation: OpConnect,
+		IP:        ip,
+		Error:     err,
+		Time:      time.Now(),
+	})
+}
+
+// LogDisconnect logs client disconnection
+func (l *Logger) LogDisconnect(ip string, reason string) {
+	l.Log(Entry{
+		Operation: OpDisconnect,
+		IP:        ip,
+		Reason:    reason,
+		Time:      time.Now(),
+	})
+}
+
 // Package level functions that use defaultLogger
 var defaultLogger *Logger
 
@@ -245,11 +288,62 @@ func Initialize(config *Config) error {
 }
 
 // Default logger functions
-func LogOpen(user, path string, mode Mode, err error)              { defaultLogger.LogOpen(user, path, mode, err) }
-func LogCreate(user, path string, err error)                       { defaultLogger.LogCreate(user, path, err) }
-func LogMkdir(user, path string, err error)                       { defaultLogger.LogMkdir(user, path, err) }
-func LogRemove(user, path string, err error)                      { defaultLogger.LogRemove(user, path, err) }
-func LogDelete(user, path string, err error)                      { defaultLogger.LogDelete(user, path, err) }
-func LogRename(user, fromPath, toPath string, err error)          { defaultLogger.LogRename(user, fromPath, toPath, err) }
-func LogReadDir(user, path string, entries int, err error)        { defaultLogger.LogReadDir(user, path, entries, err) }
-func LogAuth(user, ip string, err error)                          { defaultLogger.LogAuth(user, ip, err) }
+func LogOpen(user, path string, mode Mode, size int64, err error) {
+	if defaultLogger != nil {
+		defaultLogger.LogOpen(user, path, mode, size, err)
+	}
+}
+
+func LogCreate(user, path string, err error) {
+	if defaultLogger != nil {
+		defaultLogger.LogCreate(user, path, err)
+	}
+}
+
+func LogMkdir(user, path string, err error) {
+	if defaultLogger != nil {
+		defaultLogger.LogMkdir(user, path, err)
+	}
+}
+
+func LogRemove(user, path string, err error) {
+	if defaultLogger != nil {
+		defaultLogger.LogRemove(user, path, err)
+	}
+}
+
+func LogDelete(user, path string, err error) {
+	if defaultLogger != nil {
+		defaultLogger.LogDelete(user, path, err)
+	}
+}
+
+func LogRename(user, fromPath, toPath string, err error) {
+	if defaultLogger != nil {
+		defaultLogger.LogRename(user, fromPath, toPath, err)
+	}
+}
+
+func LogReadDir(user, path string, entries int, err error) {
+	if defaultLogger != nil {
+		defaultLogger.LogReadDir(user, path, entries, err)
+	}
+}
+
+func LogAuth(user, ip string, err error) {
+	if defaultLogger != nil {
+		defaultLogger.LogAuth(user, ip, err)
+	}
+}
+
+func LogConnect(ip string, err error) {
+	if defaultLogger != nil {
+		defaultLogger.LogConnect(ip, err)
+	}
+}
+
+func LogDisconnect(ip string, reason string) {
+	if defaultLogger != nil {
+		defaultLogger.LogDisconnect(ip, reason)
+	}
+}
