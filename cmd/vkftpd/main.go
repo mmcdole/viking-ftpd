@@ -31,18 +31,33 @@ Options:
 
 The config file should be in JSON format with the following structure:
 {
+    // Core server settings
     "listen_addr": "0.0.0.0",          // Address to listen on
     "port": 2121,                      // Port to listen on
-    "ftp_root_dir": "/mud/lib",          // Root directory for FTP access
+
+    // Directory settings
+    "ftp_root_dir": "/mud/lib",        // Root directory for FTP access
+    "home_pattern": "players/%s",       // Home directory pattern (%s = username)
+
+    // MUD-specific paths
     "character_dir_path": "/mud/lib/characters",    // Path to character save files
     "access_file_path": "/mud/lib/dgd/sys/data/access.o",   // Path to MUD's access.o
+
+    // Security settings (optional)
+    "tls_cert_file": "/path/to/cert.pem",  // Path to TLS certificate file
+    "tls_key_file": "/path/to/key.pem",    // Path to TLS private key file
+
+    // Performance settings
     "passive_port_range": [2122,2150],  // Range for passive mode
     "max_connections": 10,              // Max concurrent connections
     "idle_timeout": 300,                // Idle timeout in seconds
+
+    // Cache settings
     "character_cache_time": 60,         // How long to cache character data
     "access_cache_time": 60,            // How long to cache access permissions
-    "home_pattern": "players/%s",       // Home directory pattern (%s = username)
-    "access_log_path": "/mud/lib/log/vkftpd-access.log"  // Optional: Path to access log file
+
+    // Logging settings (optional)
+    "access_log_path": "/mud/lib/log/vkftpd-access.log"  // Path to access log file
 }
 
 Paths in the config file can be relative to the config file location.
@@ -121,6 +136,8 @@ func main() {
 		RootDir:              config.FTPRootDir,
 		HomePattern:          config.HomePattern,
 		PassiveTransferPorts: config.PassivePortRange,
+		TLSCertFile:          config.TLSCertFile,
+		TLSKeyFile:           config.TLSKeyFile,
 	}, authorizer, authenticator)
 	if err != nil {
 		log.Fatalf("Failed to create FTP server: %v", err)

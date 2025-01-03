@@ -9,17 +9,23 @@ import (
 
 // Config holds the FTP server configuration
 type Config struct {
-	// Server configuration
+	// Core server settings
 	ListenAddr         string `json:"listen_addr"`
 	Port               int    `json:"port"`
+
+	// Directory settings
 	FTPRootDir         string `json:"ftp_root_dir"`      // Root directory for FTP access
 	HomePattern        string `json:"home_pattern"`      // Pattern for user home directories (e.g., "players/%s")
+
 	// MUD-specific paths
 	CharacterDirPath  string `json:"character_dir_path"` // Path to character files directory
 	AccessFilePath    string `json:"access_file_path"`   // Path to the MUD's access.o file
-	// Logging configuration (optional)
-	AccessLogPath     string `json:"access_log_path,omitempty"`    // Optional: Path to access log file
-	// Optional settings
+
+	// Security settings
+	TLSCertFile      string `json:"tls_cert_file,omitempty"`  // Optional: Path to TLS certificate file
+	TLSKeyFile       string `json:"tls_key_file,omitempty"`   // Optional: Path to TLS private key file
+
+	// Performance settings
 	PassivePortRange [2]int `json:"passive_port_range"` // Range of ports for passive mode
 	MaxConnections   int    `json:"max_connections"`    // Maximum concurrent connections
 	IdleTimeout      int    `json:"idle_timeout"`       // Connection idle timeout in seconds
@@ -27,6 +33,9 @@ type Config struct {
 	// Cache settings
 	CharacterCacheTime int `json:"character_cache_time"` // How long to cache character data (seconds)
 	AccessCacheTime    int `json:"access_cache_time"`    // How long to cache permissions (seconds)
+
+	// Logging settings
+	AccessLogPath     string `json:"access_log_path,omitempty"`    // Optional: Path to access log file
 }
 
 // LoadConfig loads configuration from a JSON file
@@ -55,6 +64,14 @@ func LoadConfig(path string, config *Config) error {
 	// Only convert log paths to absolute if they are specified and not absolute
 	if config.AccessLogPath != "" && !filepath.IsAbs(config.AccessLogPath) {
 		config.AccessLogPath = filepath.Join(configDir, config.AccessLogPath)
+	}
+
+	// Convert TLS paths to absolute if specified and not absolute
+	if config.TLSCertFile != "" && !filepath.IsAbs(config.TLSCertFile) {
+		config.TLSCertFile = filepath.Join(configDir, config.TLSCertFile)
+	}
+	if config.TLSKeyFile != "" && !filepath.IsAbs(config.TLSKeyFile) {
+		config.TLSKeyFile = filepath.Join(configDir, config.TLSKeyFile)
 	}
 
 	// Set defaults for optional settings

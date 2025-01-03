@@ -156,8 +156,8 @@ type ftpClient struct {
 	server   *Server
 	user     string
 	fs       afero.Fs
-	homePath string // User's home directory path (relative to root)
-	rootPath string // Server's root directory absolute path
+	homePath string                     // User's home directory path (relative to root)
+	rootPath string                     // Server's root directory absolute path
 	cc       ftpserverlib.ClientContext // Current client context
 }
 
@@ -167,7 +167,7 @@ func (c *ftpClient) resolvePath(name string) (string, error) {
 	if filepath.IsAbs(name) {
 		return filepath.Clean(name), nil
 	}
-	
+
 	// Otherwise, it's relative to current directory
 	currentPath := c.cc.Path()
 	return filepath.Clean(filepath.Join(currentPath, name)), nil
