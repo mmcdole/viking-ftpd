@@ -90,7 +90,7 @@ func (d *ftpDriver) ClientConnected(cc ftpserverlib.ClientContext) (string, erro
 
 // ClientDisconnected is called when a client disconnects
 func (d *ftpDriver) ClientDisconnected(cc ftpserverlib.ClientContext) {
-	logging.LogDisconnect(cc.RemoteAddr().String(), "Client disconnected")
+	logging.LogDisconnect(cc.RemoteAddr().String())
 }
 
 // AuthUser authenticates the user and returns a ClientDriver

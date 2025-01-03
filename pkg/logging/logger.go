@@ -46,7 +46,6 @@ type Entry struct {
 	Entries   int       // For readdir operations
 	IP        string    // For auth/connect operations
 	Size      int64     // For file operations
-	Reason    string    // For disconnect operations
 	Error     error
 	Time      time.Time
 }
@@ -99,54 +98,49 @@ func New(config Config) (*Logger, error) {
 func formatMessage(e Entry) string {
 	var msg strings.Builder
 
-	// Time and operation (left-padded to 8 chars)
-	msg.WriteString(fmt.Sprintf("%s %-8s", e.Time.Format("2006-01-02 15:04:05"), e.Operation))
+	// Time and operation
+	msg.WriteString(fmt.Sprintf("%s [%s]", e.Time.Format("2006-01-02 15:04:05"), e.Operation))
 
 	// User if present
 	if e.User != "" {
-		msg.WriteString(fmt.Sprintf("User: '%s' ", e.User))
+		msg.WriteString(fmt.Sprintf(" [User: '%s']", e.User))
 	}
 
 	// Path if present
 	if e.Path != "" {
-		msg.WriteString(fmt.Sprintf("Path: '%s' ", e.Path))
+		msg.WriteString(fmt.Sprintf(" [Path: '%s']", e.Path))
 	}
 
 	// Mode if present
 	if e.Mode != "" {
-		msg.WriteString(fmt.Sprintf("Mode: %s ", e.Mode))
+		msg.WriteString(fmt.Sprintf(" [Mode: %s]", e.Mode))
 	}
 
 	// Size if present and non-zero
 	if e.Size > 0 {
-		msg.WriteString(fmt.Sprintf("Size: %d bytes ", e.Size))
+		msg.WriteString(fmt.Sprintf(" [Size: %d bytes]", e.Size))
 	}
 
 	// IP if present
 	if e.IP != "" {
-		msg.WriteString(fmt.Sprintf("IP: '%s' ", e.IP))
-	}
-
-	// Reason if present
-	if e.Reason != "" {
-		msg.WriteString(fmt.Sprintf("Reason: '%s' ", e.Reason))
+		msg.WriteString(fmt.Sprintf(" [IP: '%s']", e.IP))
 	}
 
 	// FromPath and ToPath for rename operations
 	if e.FromPath != "" && e.ToPath != "" {
-		msg.WriteString(fmt.Sprintf("From: '%s' To: '%s' ", e.FromPath, e.ToPath))
+		msg.WriteString(fmt.Sprintf(" [From: '%s'] [To: '%s']", e.FromPath, e.ToPath))
 	}
 
 	// Number of entries for readdir operations
 	if e.Entries > 0 {
-		msg.WriteString(fmt.Sprintf("Entries: %d ", e.Entries))
+		msg.WriteString(fmt.Sprintf(" [Entries: %d]", e.Entries))
 	}
 
 	// Error or success
 	if e.Error != nil {
-		msg.WriteString(fmt.Sprintf("[FAILURE: %s]", e.Error))
+		msg.WriteString(fmt.Sprintf(" [FAILURE: %s]", e.Error))
 	} else {
-		msg.WriteString("[SUCCESS]")
+		msg.WriteString(" [SUCCESS]")
 	}
 
 	return msg.String()
@@ -262,12 +256,10 @@ func (l *Logger) LogConnect(ip string, err error) {
 }
 
 // LogDisconnect logs client disconnection
-func (l *Logger) LogDisconnect(ip string, reason string) {
+func (l *Logger) LogDisconnect(ip string) {
 	l.Log(Entry{
 		Operation: OpDisconnect,
 		IP:        ip,
-		Reason:    reason,
-		Time:      time.Now(),
 	})
 }
 
@@ -342,8 +334,8 @@ func LogConnect(ip string, err error) {
 	}
 }
 
-func LogDisconnect(ip string, reason string) {
+func LogDisconnect(ip string) {
 	if defaultLogger != nil {
-		defaultLogger.LogDisconnect(ip, reason)
+		defaultLogger.LogDisconnect(ip)
 	}
 }
