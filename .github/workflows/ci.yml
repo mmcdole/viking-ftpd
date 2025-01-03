@@ -33,7 +33,9 @@ jobs:
         go-version: '1.22'
 
     - name: Build
-      run: CGO_ENABLED=0 go build -v ./cmd/vkftpd
+      run: |
+        VERSION=$(git describe --tags --always --dirty)
+        CGO_ENABLED=0 go build -v -ldflags "-X main.version=$VERSION" ./cmd/vkftpd
 
     - name: Upload artifact
       uses: actions/upload-artifact@v3

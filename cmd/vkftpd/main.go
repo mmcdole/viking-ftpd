@@ -14,9 +14,9 @@ import (
 	"github.com/mmcdole/viking-ftpd/pkg/logging"
 )
 
-const (
-	version = "1.0.0"
-	usage   = `VikingMUD FTP Server (vkftpd) - Secure FTP access to VikingMUD
+var version = "dev"  // Will be set during build
+
+const usage = `VikingMUD FTP Server (vkftpd) - Secure FTP access to VikingMUD
 
 This server integrates with VikingMUD's authentication and access control systems,
 providing secure FTP access while respecting the MUD's permissions system.
@@ -64,7 +64,6 @@ Paths in the config file can be relative to the config file location.
 The server authenticates users against their character files and enforces
 the same file access permissions as the MUD itself.
 `
-)
 
 func main() {
 	// Setup command line flags
