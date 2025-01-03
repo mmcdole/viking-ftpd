@@ -10,7 +10,7 @@ Requires Go 1.19 or higher. Build using the provided Makefile:
 
 ```bash
 make build   # Creates vkftpd binary with version information
-./vkftpd --version  # Verify installation
+./vkftpd --version  # Verify build
 ```
 
 Or build manually with `go build`.
