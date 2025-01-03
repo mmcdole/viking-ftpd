@@ -79,7 +79,7 @@ func main() {
 
 	// Handle version flag
 	if *showVersion {
-		fmt.Printf("Viking FTP Server v%s\n", version)
+		fmt.Printf("Viking FTP Server %s\n", version)
 		os.Exit(0)
 	}
 
@@ -142,7 +142,7 @@ func main() {
 		log.Fatalf("Failed to create FTP server: %v", err)
 	}
 
-	log.Printf("Starting VikingMUD FTP Server v%s on %s:%d", version, config.ListenAddr, config.Port)
+	log.Printf("Starting VikingMUD FTP Server %s on %s:%d", version, config.ListenAddr, config.Port)
 	if err := server.ListenAndServe(); err != nil {
 		log.Fatalf("Error starting server: %v", err)
 	}
