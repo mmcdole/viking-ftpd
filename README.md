@@ -19,7 +19,7 @@ Or build manually with `go build`.
 To start the server with your configuration:
 
 ```bash
-./vkftpd -config config.json
+./vkftpd --config config.json
 ```
 
 ## Configuration
