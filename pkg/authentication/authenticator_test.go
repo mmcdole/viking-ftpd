@@ -28,7 +28,7 @@ func TestAuthenticator(t *testing.T) {
 
 	t.Run("Authentication", func(t *testing.T) {
 		source := NewMemorySource(nil)
-		source.AddCharacter("drake", "GgHKjSw.CAsOo") // Known hash for "billiards"
+		source.AddCharacter("drake", "tek4edTZE898g") // Test hash for "testpassword123"
 
 		auth, err := NewAuthenticator(source, nil, time.Minute)
 		if err != nil {
@@ -36,7 +36,7 @@ func TestAuthenticator(t *testing.T) {
 		}
 
 		t.Run("Valid credentials", func(t *testing.T) {
-			if err := auth.Authenticate("drake", "billiards"); err != nil {
+			if err := auth.Authenticate("drake", "testpassword123"); err != nil {
 				t.Errorf("authentication failed: %v", err)
 			}
 		})
@@ -56,7 +56,7 @@ func TestAuthenticator(t *testing.T) {
 
 	t.Run("User Existence", func(t *testing.T) {
 		source := NewMemorySource(nil)
-		source.AddCharacter("drake", "GgHKjSw.CAsOo")
+		source.AddCharacter("drake", "tek4edTZE898g")
 
 		auth, err := NewAuthenticator(source, nil, time.Minute)
 		if err != nil {
@@ -86,7 +86,7 @@ func TestAuthenticator(t *testing.T) {
 
 	t.Run("Caching", func(t *testing.T) {
 		source := NewMemorySource(nil)
-		source.AddCharacter("drake", "GgHKjSw.CAsOo")
+		source.AddCharacter("drake", "tek4edTZE898g")
 
 		auth, err := NewAuthenticator(source, nil, time.Minute)
 		if err != nil {
