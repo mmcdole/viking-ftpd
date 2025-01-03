@@ -610,23 +610,23 @@ func TestValueParsing(t *testing.T) {
 			{
 				name:  "Empty Array Key",
 				input: `([1|({0|}):42])`,
-				want:  map[string]interface{}{},  // Array key is skipped
+				want:  map[string]interface{}{}, // Array key is skipped
 			},
 			{
 				name:  "Array Key With String Value",
 				input: `([1|({2|1,2}):"hello"])`,
-				want:  map[string]interface{}{},  // Array key is skipped
+				want:  map[string]interface{}{}, // Array key is skipped
 			},
 			{
 				name:  "Map Key With Number Value",
 				input: `([1|([1|"x":1]):42])`,
-				want:  map[string]interface{}{},  // Map key is skipped
+				want:  map[string]interface{}{}, // Map key is skipped
 			},
 			{
 				name:  "Mixed Key Types",
 				input: `([3|({2|1,2}):3,"a":1,([1|"x":1]):2])`,
 				want: map[string]interface{}{
-					"a": 1,  // Only primitive key is kept
+					"a": 1, // Only primitive key is kept
 				},
 			},
 			// Error cases
@@ -725,6 +725,12 @@ func TestRealWorldFileParsing(t *testing.T) {
 	// Test character files
 	characterPath := "../../resources/characters"
 	t.Logf("Looking for characters in: %s", characterPath)
+
+	// Skip if character directory doesn't exist
+	if _, err := os.Stat(characterPath); os.IsNotExist(err) {
+		t.Skip("Skipping real-world file tests: character directory not found")
+	}
+
 	err := filepath.Walk(characterPath, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
