@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"path/filepath"
@@ -54,7 +55,7 @@ The config file should be in JSON format with the following structure:
     "port": 2121,
 
     "ftp_root_dir": "/mud/lib",
-    "home_pattern": "players/%s",
+    "home_pattern": "players/%%s",
 
     "character_dir_path": "/mud/lib/characters",
     "access_file_path": "/mud/lib/dgd/sys/data/access.o",
@@ -70,11 +71,7 @@ The config file should be in JSON format with the following structure:
     "access_cache_time": 60,
 
     "access_log_path": "/mud/lib/log/vkftpd-access.log"
-}
-
-Paths in the config file can be relative to the config file location.
-The server authenticates users against their character files and enforces
-the same file access permissions as the MUD itself.`
+}`
 
 func main() {
 	// Setup command line flags
@@ -91,7 +88,7 @@ func main() {
 
 	// Handle help flag
 	if *showHelp {
-		fmt.Println(helpText)
+		io.WriteString(os.Stdout, helpText + "\n")
 		os.Exit(0)
 	}
 
@@ -159,7 +156,7 @@ func main() {
 		log.Fatalf("Failed to create FTP server: %v", err)
 	}
 
-	log.Printf("Starting VikingMUD FTP Server %s on %s:%d", version, config.ListenAddr, config.Port)
+	fmt.Printf("Starting VikingMUD FTP Server %s on %s:%d\n", version, config.ListenAddr, config.Port)
 	if err := server.ListenAndServe(); err != nil {
 		log.Fatalf("Error starting server: %v", err)
 	}
