@@ -1,11 +1,7 @@
 package main
 
 import (
-	"flag"
 	"fmt"
-	"io"
-	"log"
-	"os"
 	"path/filepath"
 	"time"
 
@@ -13,43 +9,30 @@ import (
 	"github.com/mmcdole/viking-ftpd/pkg/authorization"
 	"github.com/mmcdole/viking-ftpd/pkg/ftpserver"
 	"github.com/mmcdole/viking-ftpd/pkg/logging"
+	"github.com/spf13/cobra"
 )
 
-var version = "dev" // Will be set during build
+var (
+	version     = "dev" // Will be set during build
+	cfgFile     string
+	showVersion bool
+)
 
-const shortUsage = `VikingMUD FTP Server (vkftpd)
+func main() {
+	cobra.CheckErr(rootCmd.Execute())
+}
 
-Usage: vkftpd [options]
-
-Options:
-  -config string
-        Path to config file (required)
-  -version
-        Show version information
-  -help
-        Show detailed help and example configuration
-
-Use -help for more information about configuration and usage.
-`
-
-const helpText = `VikingMUD FTP Server (vkftpd) - Secure FTP access to VikingMUD
+var rootCmd = &cobra.Command{
+	Use:          "vkftpd",
+	Short:        "VikingMUD FTP Server",
+	SilenceUsage: false,
+	SilenceErrors: true,
+	Long: `VikingMUD FTP Server (vkftpd) - Secure FTP access to VikingMUD
 
 This server integrates with VikingMUD's authentication and access control systems,
 providing secure FTP access while respecting the MUD's permissions system.
 
-Usage: vkftpd [options]
-
-Options:
-  -config string
-        Path to config file (required)
-  -version
-        Show version information
-  -help
-        Show this help message
-
-Example Configuration:
-The config file should be in JSON format with the following structure:
-
+Configuration file must be in JSON format with the following structure:
 {
     "listen_addr": "0.0.0.0",
     "port": 2121,
@@ -65,93 +48,74 @@ The config file should be in JSON format with the following structure:
     "character_cache_time": 60,
     "access_cache_time": 60,
     "access_log_path": "/mud/lib/log/vkftpd-access.log"
-}`
-
-func main() {
-	// Setup command line flags
-	configPath := flag.String("config", "", "Path to config file (required)")
-	showVersion := flag.Bool("version", false, "Show version information")
-	showHelp := flag.Bool("help", false, "Show detailed help and example configuration")
-
-	// Override default usage to show short version
-	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "%s", shortUsage)
-	}
-
-	flag.Parse()
-
-	// Handle help flag
-	if *showHelp {
-		io.WriteString(os.Stdout, helpText+"\n")
-		os.Exit(0)
-	}
-
-	// Handle version flag
-	if *showVersion {
-		fmt.Printf("VikingMUD FTP Server %s\n", version)
-		os.Exit(0)
-	}
-
-	// Check for required config
-	if *configPath == "" {
-		fmt.Fprintf(os.Stderr, "Error: Config file path is required\nUsage: vkftpd -config <path>\nUse -help for detailed usage and example configuration\n")
-		os.Exit(1)
-	}
-
-	// Convert to absolute path if needed
-	if !filepath.IsAbs(*configPath) {
-		var err error
-		*configPath, err = filepath.Abs(*configPath)
-		if err != nil {
-			log.Fatalf("Failed to get absolute path: %v", err)
+}`,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		if showVersion {
+			fmt.Printf("VikingMUD FTP Server %s\n", version)
+			return nil
 		}
-	}
 
-	// Load configuration
-	var config Config
-	err := LoadConfig(*configPath, &config)
-	if err != nil {
-		log.Fatalf("Failed to load config: %v", err)
-	}
+		if cfgFile == "" {
+			return fmt.Errorf("config file is required (use --config)")
+		}
 
-	// Initialize logging
-	logConfig := logging.Config{
-		AccessLogPath: config.AccessLogPath,
-	}
-	if err := logging.Initialize(&logConfig); err != nil {
-		log.Fatalf("Failed to initialize logging: %v", err)
-	}
+		// Convert to absolute path if needed
+		if !filepath.IsAbs(cfgFile) {
+			var err error
+			cfgFile, err = filepath.Abs(cfgFile)
+			if err != nil {
+				return fmt.Errorf("failed to get absolute path: %v", err)
+			}
+		}
 
-	// Create authorizer for permission checks
-	source := authorization.NewFileSource(config.AccessFilePath)
-	authorizer, err := authorization.NewAuthorizer(source, time.Duration(config.AccessCacheTime)*time.Second)
-	if err != nil {
-		log.Fatalf("Failed to create authorizer: %v", err)
-	}
+		// Load configuration
+		var config Config
+		if err := LoadConfig(cfgFile, &config); err != nil {
+			return fmt.Errorf("failed to load config: %v", err)
+		}
 
-	// Create authenticator
-	charSource := authentication.NewFileSource(config.CharacterDirPath)
-	authenticator, err := authentication.NewAuthenticator(charSource, nil, time.Duration(config.CharacterCacheTime)*time.Second)
-	if err != nil {
-		log.Fatalf("Failed to create authenticator: %v", err)
-	}
+		// Initialize logging
+		logConfig := logging.Config{
+			AccessLogPath: config.AccessLogPath,
+		}
+		if err := logging.Initialize(&logConfig); err != nil {
+			return fmt.Errorf("failed to initialize logging: %v", err)
+		}
 
-	// Create and start FTP server
-	server, err := ftpserver.New(&ftpserver.Config{
-		ListenAddr:           config.ListenAddr,
-		Port:                 config.Port,
-		RootDir:              config.FTPRootDir,
-		HomePattern:          config.HomePattern,
-		PassiveTransferPorts: config.PassivePortRange,
-		TLSCertFile:          config.TLSCertFile,
-		TLSKeyFile:           config.TLSKeyFile,
-	}, authorizer, authenticator)
-	if err != nil {
-		log.Fatalf("Failed to create FTP server: %v", err)
-	}
+		// Create authorizer for permission checks
+		source := authorization.NewFileSource(config.AccessFilePath)
+		authorizer, err := authorization.NewAuthorizer(source, time.Duration(config.AccessCacheTime)*time.Second)
+		if err != nil {
+			return fmt.Errorf("failed to create authorizer: %v", err)
+		}
 
-	fmt.Printf("Starting VikingMUD FTP Server %s on %s:%d\n", version, config.ListenAddr, config.Port)
-	if err := server.ListenAndServe(); err != nil {
-		log.Fatalf("Error starting server: %v", err)
-	}
+		// Create authenticator
+		charSource := authentication.NewFileSource(config.CharacterDirPath)
+		authenticator, err := authentication.NewAuthenticator(charSource, nil, time.Duration(config.CharacterCacheTime)*time.Second)
+		if err != nil {
+			return fmt.Errorf("failed to create authenticator: %v", err)
+		}
+
+		// Create and start FTP server
+		server, err := ftpserver.New(&ftpserver.Config{
+			ListenAddr:           config.ListenAddr,
+			Port:                 config.Port,
+			RootDir:              config.FTPRootDir,
+			HomePattern:          config.HomePattern,
+			PassiveTransferPorts: config.PassivePortRange,
+			TLSCertFile:          config.TLSCertFile,
+			TLSKeyFile:           config.TLSKeyFile,
+		}, authorizer, authenticator)
+		if err != nil {
+			return fmt.Errorf("failed to create FTP server: %v", err)
+		}
+
+		fmt.Printf("Starting VikingMUD FTP Server %s on %s:%d\n", version, config.ListenAddr, config.Port)
+		return server.ListenAndServe()
+	},
+}
+
+func init() {
+	rootCmd.Flags().StringVarP(&cfgFile, "config", "c", "", "path to config file (required)")
+	rootCmd.Flags().BoolVarP(&showVersion, "version", "v", false, "show version information")
 }
