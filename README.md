@@ -14,6 +14,8 @@ Create a configuration file in JSON format. Example:
     "character_dir_path": "/mud/lib/characters",
     "access_file_path": "/mud/lib/dgd/sys/data/access.o",
     "home_pattern": "players/%s",
+    "tls_cert_file": "/path/to/cert.pem",
+    "tls_key_file": "/path/to/key.pem",
     "passive_port_range": [2122, 2150],
     "max_connections": 10,
     "idle_timeout": 300,
@@ -23,20 +25,22 @@ Create a configuration file in JSON format. Example:
 }
 ```
 
-| Setting | Description |
-|---------|-------------|
-| `listen_addr` | Address to listen on (e.g., "0.0.0.0" for all interfaces) |
-| `port` | Port to listen on (e.g., 2121) |
-| `ftp_root_dir` | Root directory for FTP access |
-| `character_dir_path` | Path to character files directory |
-| `access_file_path` | Path to the MUD's access.o file |
-| `home_pattern` | Pattern for user home directories (e.g., "players/%s") |
-| `passive_port_range` | Range of ports for passive mode |
-| `max_connections` | Maximum concurrent connections |
-| `idle_timeout` | Connection idle timeout in seconds |
-| `character_cache_time` | How long to cache character data (seconds) |
-| `access_cache_time` | How long to cache access.o data (seconds) |
-| `access_log_path` | Path to access log file |
+| Setting | Description | Default |
+|---------|-------------|---------|
+| `listen_addr` | Address to listen on (e.g., "0.0.0.0" for all interfaces) | - |
+| `port` | Port to listen on | 2121 |
+| `ftp_root_dir` | Root directory for FTP access | Required |
+| `character_dir_path` | Path to character files directory | Required |
+| `access_file_path` | Path to the MUD's access.o file | Required |
+| `home_pattern` | Pattern for user home directories (e.g., "players/%s") | Required |
+| `tls_cert_file` | Optional: Path to TLS certificate file for FTPS support | - |
+| `tls_key_file` | Optional: Path to TLS private key file for FTPS support | - |
+| `passive_port_range` | Range of ports for passive mode | [50000, 50100] |
+| `max_connections` | Maximum concurrent connections | 10 |
+| `idle_timeout` | Connection idle timeout in seconds | 300 |
+| `character_cache_time` | How long to cache character data (seconds) | 60 |
+| `access_cache_time` | How long to cache access.o data (seconds) | 60 |
+| `access_log_path` | Path to access log file | - |
 
 ## Package Overview
 

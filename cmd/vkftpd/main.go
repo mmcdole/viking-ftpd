@@ -30,34 +30,28 @@ Options:
         Show version information
 
 The config file should be in JSON format with the following structure:
+
 {
-    // Core server settings
-    "listen_addr": "0.0.0.0",          // Address to listen on
-    "port": 2121,                      // Port to listen on
+    "listen_addr": "0.0.0.0",
+    "port": 2121,
 
-    // Directory settings
-    "ftp_root_dir": "/mud/lib",        // Root directory for FTP access
-    "home_pattern": "players/%s",       // Home directory pattern (%s = username)
+    "ftp_root_dir": "/mud/lib",
+    "home_pattern": "players/%s",
 
-    // MUD-specific paths
-    "character_dir_path": "/mud/lib/characters",    // Path to character save files
-    "access_file_path": "/mud/lib/dgd/sys/data/access.o",   // Path to MUD's access.o
+    "character_dir_path": "/mud/lib/characters",
+    "access_file_path": "/mud/lib/dgd/sys/data/access.o",
 
-    // Security settings (optional)
-    "tls_cert_file": "/path/to/cert.pem",  // Path to TLS certificate file
-    "tls_key_file": "/path/to/key.pem",    // Path to TLS private key file
+    "tls_cert_file": "/path/to/cert.pem",
+    "tls_key_file": "/path/to/key.pem",
 
-    // Performance settings
-    "passive_port_range": [2122,2150],  // Range for passive mode
-    "max_connections": 10,              // Max concurrent connections
-    "idle_timeout": 300,                // Idle timeout in seconds
+    "passive_port_range": [2122, 2150],
+    "max_connections": 10,
+    "idle_timeout": 300,
 
-    // Cache settings
-    "character_cache_time": 60,         // How long to cache character data
-    "access_cache_time": 60,            // How long to cache access permissions
+    "character_cache_time": 60,
+    "access_cache_time": 60,
 
-    // Logging settings (optional)
-    "access_log_path": "/mud/lib/log/vkftpd-access.log"  // Path to access log file
+    "access_log_path": "/mud/lib/log/vkftpd-access.log"
 }
 
 Paths in the config file can be relative to the config file location.
