@@ -53,23 +53,17 @@ The config file should be in JSON format with the following structure:
 {
     "listen_addr": "0.0.0.0",
     "port": 2121,
-
     "ftp_root_dir": "/mud/lib",
-    "home_pattern": "players/%%s",
-
+    "home_pattern": "players/%s",
     "character_dir_path": "/mud/lib/characters",
     "access_file_path": "/mud/lib/dgd/sys/data/access.o",
-
     "tls_cert_file": "/path/to/cert.pem",
     "tls_key_file": "/path/to/key.pem",
-
     "passive_port_range": [2122, 2150],
     "max_connections": 10,
     "idle_timeout": 300,
-
     "character_cache_time": 60,
     "access_cache_time": 60,
-
     "access_log_path": "/mud/lib/log/vkftpd-access.log"
 }`
 
@@ -88,7 +82,7 @@ func main() {
 
 	// Handle help flag
 	if *showHelp {
-		io.WriteString(os.Stdout, helpText + "\n")
+		io.WriteString(os.Stdout, helpText+"\n")
 		os.Exit(0)
 	}
 
@@ -100,7 +94,7 @@ func main() {
 
 	// Check for required config
 	if *configPath == "" {
-		fmt.Fprintf(os.Stderr, "Error: Config file path is required\nUse -help for detailed usage and example configuration\n")
+		fmt.Fprintf(os.Stderr, "Error: Config file path is required\nUsage: vkftpd -config <path>\nUse -help for detailed usage and example configuration\n")
 		os.Exit(1)
 	}
 
