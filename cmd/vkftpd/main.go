@@ -14,7 +14,7 @@ import (
 	"github.com/mmcdole/viking-ftpd/pkg/logging"
 )
 
-var version = "dev"  // Will be set during build
+var version = "dev" // Will be set during build
 
 const usage = `VikingMUD FTP Server (vkftpd) - Secure FTP access to VikingMUD
 
