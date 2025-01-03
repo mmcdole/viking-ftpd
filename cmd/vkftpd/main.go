@@ -16,7 +16,22 @@ import (
 
 var version = "dev" // Will be set during build
 
-const usage = `VikingMUD FTP Server (vkftpd) - Secure FTP access to VikingMUD
+const shortUsage = `VikingMUD FTP Server (vkftpd)
+
+Usage: vkftpd [options]
+
+Options:
+  -config string
+        Path to config file (required)
+  -version
+        Show version information
+  -help
+        Show detailed help and example configuration
+
+Use -help for more information about configuration and usage.
+`
+
+const helpText = `VikingMUD FTP Server (vkftpd) - Secure FTP access to VikingMUD
 
 This server integrates with VikingMUD's authentication and access control systems,
 providing secure FTP access while respecting the MUD's permissions system.
@@ -28,7 +43,10 @@ Options:
         Path to config file (required)
   -version
         Show version information
+  -help
+        Show this help message
 
+Example Configuration:
 The config file should be in JSON format with the following structure:
 
 {
@@ -56,31 +74,36 @@ The config file should be in JSON format with the following structure:
 
 Paths in the config file can be relative to the config file location.
 The server authenticates users against their character files and enforces
-the same file access permissions as the MUD itself.
-`
+the same file access permissions as the MUD itself.`
 
 func main() {
 	// Setup command line flags
 	configPath := flag.String("config", "", "Path to config file (required)")
 	showVersion := flag.Bool("version", false, "Show version information")
+	showHelp := flag.Bool("help", false, "Show detailed help and example configuration")
 
-	// Override default usage
+	// Override default usage to show short version
 	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "%s", usage)
+		fmt.Fprintf(os.Stderr, "%s", shortUsage)
 	}
 
 	flag.Parse()
 
+	// Handle help flag
+	if *showHelp {
+		fmt.Println(helpText)
+		os.Exit(0)
+	}
+
 	// Handle version flag
 	if *showVersion {
-		fmt.Printf("Viking FTP Server %s\n", version)
+		fmt.Printf("VikingMUD FTP Server %s\n", version)
 		os.Exit(0)
 	}
 
 	// Check for required config
 	if *configPath == "" {
-		fmt.Fprintf(os.Stderr, "Error: Config file path is required\n\n")
-		flag.Usage()
+		fmt.Fprintf(os.Stderr, "Error: Config file path is required\nUse -help for detailed usage and example configuration\n")
 		os.Exit(1)
 	}
 
