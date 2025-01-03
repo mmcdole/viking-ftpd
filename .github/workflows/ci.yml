@@ -56,14 +56,31 @@ jobs:
     
     steps:
     - uses: actions/checkout@v3
-    
-    - name: Download artifact
-      uses: actions/download-artifact@v3
       with:
-        name: vkftpd
-        path: .
+        fetch-depth: 0  # Fetch all history and tags
+    
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.22'
+
+    - name: Build release binaries
+      env:
+        CGO_ENABLED: 0
+      run: |
+        git fetch --prune --unshallow || true  # Ensure we have full history
+        git fetch --tags || true  # Ensure we have all tags
+        VERSION=$(git describe --tags --always --dirty)
+        LDFLAGS="-X main.version=$VERSION"
+        GOOS=linux GOARCH=amd64 go build -ldflags "$LDFLAGS" -o vkftpd-linux-amd64 ./cmd/vkftpd
+        GOOS=darwin GOARCH=amd64 go build -ldflags "$LDFLAGS" -o vkftpd-darwin-amd64 ./cmd/vkftpd
+        GOOS=darwin GOARCH=arm64 go build -ldflags "$LDFLAGS" -o vkftpd-darwin-arm64 ./cmd/vkftpd
 
     - name: Create Release
       uses: softprops/action-gh-release@v1
       with:
-        files: vkftpd
+        files: |
+          vkftpd-linux-amd64
+          vkftpd-darwin-amd64
+          vkftpd-darwin-arm64
+        generate_release_notes: true
