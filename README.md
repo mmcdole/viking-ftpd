@@ -25,22 +25,22 @@ Create a configuration file in JSON format. Example:
 }
 ```
 
-| Setting | Description | Required | Default |
-|---------|-------------|----------|---------|
-| `listen_addr` | Address to listen on (e.g., "0.0.0.0" for all interfaces) | No | - |
-| `port` | Port to listen on | No | 2121 |
-| `ftp_root_dir` | Root directory for FTP access | Yes | - |
-| `character_dir_path` | Path to character files directory | Yes | - |
-| `access_file_path` | Path to the MUD's access.o file | Yes | - |
-| `home_pattern` | Pattern for user home directories (e.g., "players/%s") | No | - |
-| `tls_cert_file` | Path to TLS certificate file for FTPS support | No | - |
-| `tls_key_file` | Path to TLS private key file for FTPS support | No | - |
-| `passive_port_range` | Range of ports for passive mode | No | [50000, 50100] |
-| `max_connections` | Maximum concurrent connections | No | 10 |
-| `idle_timeout` | Connection idle timeout in seconds | No | 300 |
-| `character_cache_time` | How long to cache character data (seconds) | No | 60 |
-| `access_cache_time` | How long to cache access.o data (seconds) | No | 60 |
-| `access_log_path` | Path to access log file | No | - |
+| Setting | Description |
+|---------|-------------|
+| `listen_addr` | Address to listen on (e.g., "0.0.0.0" for all interfaces) |
+| `port` | Port to listen on (default: 2121) |
+| `ftp_root_dir` | Root directory for FTP access (required) |
+| `character_dir_path` | Path to character files directory (required) |
+| `access_file_path` | Path to the MUD's access.o file (required) |
+| `home_pattern` | Pattern for user home directories (e.g., "players/%s") |
+| `tls_cert_file` | Path to TLS certificate file for FTPS support |
+| `tls_key_file` | Path to TLS private key file for FTPS support |
+| `passive_port_range` | Range of ports for passive mode (default: [50000, 50100]) |
+| `max_connections` | Maximum concurrent connections (default: 10) |
+| `idle_timeout` | Connection idle timeout in seconds (default: 300) |
+| `character_cache_time` | How long to cache character data in seconds (default: 60) |
+| `access_cache_time` | How long to cache access.o data in seconds (default: 60) |
+| `access_log_path` | Path to access log file |
 
 ## Package Overview
 
