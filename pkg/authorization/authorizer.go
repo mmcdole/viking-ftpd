@@ -6,23 +6,42 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/mmcdole/viking-ftpd/pkg/playerdata"
 )
+
+// AccessTree represents a node in the access permission tree
+type AccessTree struct {
+	Root   *AccessNode
+	Groups []string
+}
+
+// AccessNode represents a node in the access tree
+type AccessNode struct {
+	DotAccess  Permission
+	StarAccess Permission
+	Children   map[string]*AccessNode
+}
 
 // Authorizer handles access control and permissions with caching
 type Authorizer struct {
 	source        AccessSource
+	characterData playerdata.Source
 	cacheDuration time.Duration
 
 	mu          sync.RWMutex
 	trees       map[string]*AccessTree
 	lastRefresh time.Time
+	charSource  playerdata.Source
 }
 
 // NewAuthorizer creates a new Authorizer instance
-func NewAuthorizer(source AccessSource, cacheDuration time.Duration) (*Authorizer, error) {
+func NewAuthorizer(source AccessSource, characterData playerdata.Source, cacheDuration time.Duration) (*Authorizer, error) {
 	a := &Authorizer{
 		source:        source,
+		characterData: characterData,
 		cacheDuration: cacheDuration,
+		charSource:    characterData,
 		trees:         make(map[string]*AccessTree),
 	}
 
@@ -66,6 +85,52 @@ func (a *Authorizer) ensureFreshCache() error {
 	return nil
 }
 
+// getImplicitPermission returns any implicit permissions for a path and user
+func (a *Authorizer) getImplicitPermission(username string, parts []string) (Permission, bool) {
+	if len(parts) >= 2 && parts[0] == "players" {
+		if parts[1] == username {
+			return GrantGrant, true // Users always have GRANT_GRANT on their own directory
+		}
+		// Check for open directory at exactly level 3
+		if len(parts) >= 3 && parts[2] == "open" && len(parts) == 3 {
+			return Read, true // Everyone can read open directories at level 3
+		}
+	}
+	return Revoked, false
+}
+
+// getImplicitGroups returns implicit groups based on character level
+func (a *Authorizer) getImplicitGroups(username string) []string {
+	if err := a.ensureFreshCache(); err != nil {
+		return nil
+	}
+
+	if a.charSource == nil {
+		return nil
+	}
+
+	char, err := a.charSource.LoadCharacter(username)
+	if err != nil {
+		return nil
+	}
+
+	var groups []string
+
+	// Check if the groups exist in the access map before adding them
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+
+	// Arch_full for archwizards and above
+	if _, ok := a.trees[GroupArchFull]; ok && char.Level >= playerdata.ARCHWIZARD {
+		groups = append(groups, GroupArchFull)
+	} else if _, ok := a.trees[GroupArchJunior]; ok && char.Level >= playerdata.JUNIOR_ARCH && char.Level != playerdata.ELDER {
+		// Arch_junior for junior arches (except elders)
+		groups = append(groups, GroupArchJunior)
+	}
+
+	return groups
+}
+
 // HasPermission implements Authorizer
 func (a *Authorizer) HasPermission(username string, filepath string, requiredPerm Permission) bool {
 	if err := a.ensureFreshCache(); err != nil {
@@ -92,14 +157,8 @@ func (a *Authorizer) GetEffectivePermission(username string, filepath string) Pe
 	}
 
 	// Check implicit permissions first
-	if len(parts) >= 2 && parts[0] == "players" {
-		if parts[1] == username {
-			return GrantGrant // Users always have GRANT_GRANT on their own directory
-		}
-		// Check for open directory at exactly level 3
-		if len(parts) >= 3 && parts[2] == "open" && len(parts) == 3 {
-			return Read // Everyone can read open directories at level 3
-		}
+	if implicitPerm, ok := a.getImplicitPermission(username, parts); ok {
+		return implicitPerm
 	}
 
 	// Check user's direct permissions
@@ -110,9 +169,8 @@ func (a *Authorizer) GetEffectivePermission(username string, filepath string) Pe
 		}
 	}
 
-	// Check group permissions
-	groups := a.GetUserGroups(username)
-	for _, group := range groups {
+	// Check all group permissions (both explicit and implicit)
+	for _, group := range a.GetGroups(username) {
 		if tree, ok := a.trees[group]; ok {
 			perm := a.checkNodePermission(tree.Root, parts)
 			if perm != Revoked {
@@ -140,12 +198,38 @@ func (a *Authorizer) GetUserGroups(username string) []string {
 
 	// Get user's tree
 	tree, ok := a.trees[username]
-	if !ok || tree.Root == nil {
+	if !ok || tree == nil {
 		return nil
 	}
 
 	// Groups are stored in the tree itself
 	return tree.Groups
+}
+
+// GetGroups returns all groups that a user belongs to, including both
+// explicit groups from the access tree and implicit groups based on character level.
+func (a *Authorizer) GetGroups(username string) []string {
+	// Get implicit groups first
+	groups := make([]string, 0)
+	implicitGroups := a.getImplicitGroups(username)
+	if implicitGroups != nil {
+		groups = append(groups, implicitGroups...)
+	}
+
+	// Get user groups from access tree
+	userGroups := make([]string, 0)
+	if userNode, ok := a.trees[username]; ok {
+		if userNode != nil {
+			userGroups = userNode.Groups
+		}
+	}
+
+	// Combine implicit and explicit groups
+	if userGroups != nil {
+		groups = append(groups, userGroups...)
+	}
+
+	return groups
 }
 
 // checkNodePermission recursively checks permissions in a node
@@ -177,19 +261,4 @@ func (a *Authorizer) checkNodePermission(node *AccessNode, pathParts []string) P
 
 	// No matching child, use star access
 	return node.StarAccess
-}
-
-// checkTreePermission checks a single tree for permissions on a path
-func (a *Authorizer) checkTreePermission(node *AccessNode, filepath string) Permission {
-	// Clean the path and split into parts
-	parts := strings.Split(path.Clean(filepath), "/")
-	if len(parts) > 0 && parts[0] == "" {
-		parts = parts[1:]
-	}
-	// Handle root path specifically
-	if len(parts) == 1 && parts[0] == "" {
-		parts = []string{} // Empty array for root path
-	}
-
-	return a.checkNodePermission(node, parts)
 }
