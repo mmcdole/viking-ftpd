@@ -22,6 +22,7 @@ const (
 	OpDelete     Operation = "DELETE"     // Deleting a file or directory
 	OpRename     Operation = "RENAME"     // Renaming a file or directory
 	OpReadDir    Operation = "READDIR"    // Reading directory contents
+	OpChdir      Operation = "CHDIR"      // Changing current directory
 	OpAuth       Operation = "AUTH"       // Authentication attempt
 	OpConnect    Operation = "CONNECT"    // Client connection
 	OpDisconnect Operation = "DISCONNECT" // Client disconnection
@@ -235,6 +236,17 @@ func (l *Logger) LogReadDir(user, path string, entries int, err error) {
 	})
 }
 
+// LogChdir logs directory change operations
+func (l *Logger) LogChdir(user, path string, err error) {
+	l.Log(Entry{
+		Operation: OpChdir,
+		User:      user,
+		Path:      path,
+		Error:     err,
+		Time:      time.Now(),
+	})
+}
+
 // LogAuth logs authentication attempts
 func (l *Logger) LogAuth(user, ip string, err error) {
 	l.Log(Entry{
@@ -319,6 +331,12 @@ func LogRename(user, fromPath, toPath string, err error) {
 func LogReadDir(user, path string, entries int, err error) {
 	if defaultLogger != nil {
 		defaultLogger.LogReadDir(user, path, entries, err)
+	}
+}
+
+func LogChdir(user, path string, err error) {
+	if defaultLogger != nil {
+		defaultLogger.LogChdir(user, path, err)
 	}
 }
 

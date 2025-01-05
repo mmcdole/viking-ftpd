@@ -181,10 +181,10 @@ func (c *ftpClient) GetFS() afero.Fs {
 // ChangeCwd implements ftpserverlib.ClientDriverExtensionChdir
 func (c *ftpClient) ChangeCwd(path string) error {
 	if !c.server.authorizer.GetEffectivePermission(c.user, path).CanRead() {
-		logging.LogReadDir(c.user, path, 0, os.ErrPermission)
+		logging.LogChdir(c.user, path, os.ErrPermission)
 		return os.ErrPermission
 	}
-	logging.LogReadDir(c.user, path, 0, nil)
+	logging.LogChdir(c.user, path, nil)
 	return nil
 }
 
