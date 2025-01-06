@@ -89,7 +89,7 @@ func productionTree() map[string]interface{} {
 				"tmp": Write,
 			},
 			// Domain wizard with specific area access
-			"wizard": map[string]interface{}{
+			"wizard1": map[string]interface{}{
 				"d": map[string]interface{}{
 					"MyRealm": Write,
 					"SharedRealm": map[string]interface{}{
@@ -199,9 +199,8 @@ func groupTree() map[string]interface{} {
 func TestProductionExample(t *testing.T) {
 	// Create mock user source
 	source := newMockUserSource()
-	source.addUser("wizard", users.WIZARD)
-	source.addUser("arch", users.ADMINISTRATOR)
-	source.addUser("player", users.MORTAL_FIRST)
+	source.addUser("wizard1", users.WIZARD)
+
 
 	auth := NewAuthorizer(newMockAccessSource(productionTree()), source, time.Hour)
 
@@ -221,9 +220,9 @@ func TestProductionExample(t *testing.T) {
 	t.Run("DomainAccess", func(t *testing.T) {
 		cases := []testCase{
 			// Domain wizard permissions
-			{"realm_write", "wizard", "/d/MyRealm/room.c", Write},           // Full write in own realm
-			{"shared_realm_root", "wizard", "/d/SharedRealm", Write},        // Write at shared realm root
-			{"shared_realm_files", "wizard", "/d/SharedRealm/room.c", Read}, // Only read in shared files
+			{"realm_write", "wizard1", "/d/MyRealm/room.c", Write},           // Full write in own realm
+			{"shared_realm_root", "wizard1", "/d/SharedRealm", Write},        // Write at shared realm root
+			{"shared_realm_files", "wizard1", "/d/SharedRealm/room.c", Read}, // Only read in shared files
 		}
 		runTests(t, auth, cases)
 	})
