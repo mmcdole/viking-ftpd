@@ -17,6 +17,7 @@ var (
 	version     = "dev" // Will be set during build
 	cfgFile     string
 	showVersion bool
+	debug       bool
 )
 
 func main() {
@@ -102,6 +103,7 @@ Configuration file must be in JSON format with the following structure:
 			PassiveTransferPorts: config.PassivePortRange,
 			TLSCertFile:          config.TLSCertFile,
 			TLSKeyFile:           config.TLSKeyFile,
+			Debug:                debug || config.Debug, // Use command line flag or config file
 		}, authorizer, authenticator)
 		if err != nil {
 			return fmt.Errorf("failed to create FTP server: %v", err)
@@ -113,6 +115,7 @@ Configuration file must be in JSON format with the following structure:
 }
 
 func init() {
-	rootCmd.Flags().StringVarP(&cfgFile, "config", "c", "", "path to config file (required)")
-	rootCmd.Flags().BoolVarP(&showVersion, "version", "v", false, "show version information")
+	rootCmd.PersistentFlags().StringVarP(&cfgFile, "config", "c", "", "config file path")
+	rootCmd.PersistentFlags().BoolVarP(&showVersion, "version", "v", false, "show version")
+	rootCmd.PersistentFlags().BoolVarP(&debug, "debug", "d", false, "enable debug logging")
 }

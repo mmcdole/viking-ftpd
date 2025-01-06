@@ -24,6 +24,7 @@ type Config struct {
 	PassiveTransferPorts [2]int
 	TLSCertFile          string // Path to TLS certificate file
 	TLSKeyFile           string // Path to TLS private key file
+	Debug                bool   // Enable debug logging in ftpserver
 }
 
 // Server wraps the FTP server with our custom auth
@@ -84,6 +85,9 @@ func (d *ftpDriver) GetSettings() (*ftpserverlib.Settings, error) {
 
 // ClientConnected is called when a client connects
 func (d *ftpDriver) ClientConnected(cc ftpserverlib.ClientContext) (string, error) {
+	if d.server.config.Debug {
+		cc.SetDebug(true)
+	}
 	logging.LogConnect(cc.RemoteAddr().String(), nil)
 	return "Welcome to Viking FTP server", nil
 }
@@ -547,18 +551,4 @@ func (c *ftpClient) ModTime(name string) (time.Time, error) {
 	}
 
 	return info.ModTime(), nil
-}
-
-// ftpCommandDriver implements ftpserverlib.Driver
-type ftpCommandDriver struct {
-	cc ftpserverlib.ClientContext
-}
-
-func (d *ftpCommandDriver) HandleCommand(command string, args []string) error {
-	logging.LogCommand(command, args, nil)
-	return nil
-}
-
-func (d *ftpDriver) GetCommandDriver(cc ftpserverlib.ClientContext) (interface{}, error) {
-	return &ftpCommandDriver{cc: cc}, nil
 }

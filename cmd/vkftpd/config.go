@@ -36,6 +36,7 @@ type Config struct {
 
 	// Logging settings
 	AccessLogPath     string `json:"access_log_path,omitempty"`    // Optional: Path to access log file
+	Debug            bool   `json:"debug,omitempty"`              // Enable debug logging
 }
 
 // LoadConfig loads configuration from a JSON file
