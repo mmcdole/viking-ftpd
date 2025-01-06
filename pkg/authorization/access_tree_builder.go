@@ -2,8 +2,8 @@ package authorization
 
 import "fmt"
 
-// ConvertToAccessTrees converts raw data into a map of access trees
-func ConvertToAccessTrees(rawData map[string]interface{}) (map[string]*AccessTree, error) {
+// BuildAccessTrees constructs a map of access trees from raw data
+func BuildAccessTrees(rawData map[string]interface{}) (map[string]*AccessTree, error) {
 	result := make(map[string]*AccessTree)
 
 	// Look for access_map key
@@ -17,18 +17,18 @@ func ConvertToAccessTrees(rawData map[string]interface{}) (map[string]*AccessTre
 		if !ok {
 			return nil, fmt.Errorf("invalid user tree format for %s: expected map[string]interface{}, got %T", username, rawUserTree)
 		}
-		tree, err := convertToAccessTree(userMap)
+		tree, err := buildAccessTree(userMap)
 		if err != nil {
-			return nil, fmt.Errorf("converting tree for user %s: %w", username, err)
+			return nil, fmt.Errorf("building tree for user %s: %w", username, err)
 		}
 		result[username] = tree
 	}
 	return result, nil
 }
 
-// convertToAccessTree converts a raw data map into an access tree
-func convertToAccessTree(data map[string]interface{}) (*AccessTree, error) {
-	root, groups, err := convertToAccessNode(data)
+// buildAccessTree constructs an access tree from raw data
+func buildAccessTree(data map[string]interface{}) (*AccessTree, error) {
+	root, groups, err := buildAccessNode(data)
 	if err != nil {
 		return nil, err
 	}
@@ -39,8 +39,8 @@ func convertToAccessTree(data map[string]interface{}) (*AccessTree, error) {
 	}, nil
 }
 
-// convertToAccessNode recursively converts a raw data map into an access node
-func convertToAccessNode(data map[string]interface{}) (*AccessNode, []string, error) {
+// buildAccessNode recursively constructs an access node from raw data
+func buildAccessNode(data map[string]interface{}) (*AccessNode, []string, error) {
 	node := &AccessNode{
 		DotAccess:  Revoked,
 		StarAccess: Revoked,
@@ -52,24 +52,24 @@ func convertToAccessNode(data map[string]interface{}) (*AccessNode, []string, er
 	for key, value := range data {
 		switch key {
 		case ".":
-			perm, err := convertToPermission(value)
+			perm, err := parsePermission(value)
 			if err != nil {
-				return nil, nil, fmt.Errorf("converting dot access: %w", err)
+				return nil, nil, fmt.Errorf("parsing dot access: %w", err)
 			}
 			node.DotAccess = perm
 		case "*":
 			// Star access can be either a direct permission or a directory node
 			if childMap, ok := value.(map[string]interface{}); ok {
-				child, childGroups, err := convertToAccessNode(childMap)
+				child, childGroups, err := buildAccessNode(childMap)
 				if err != nil {
-					return nil, nil, fmt.Errorf("converting star directory: %w", err)
+					return nil, nil, fmt.Errorf("building star directory: %w", err)
 				}
 				node.Children["*"] = child
 				groups = append(groups, childGroups...)
 			} else {
-				perm, err := convertToPermission(value)
+				perm, err := parsePermission(value)
 				if err != nil {
-					return nil, nil, fmt.Errorf("converting star access: %w", err)
+					return nil, nil, fmt.Errorf("parsing star access: %w", err)
 				}
 				node.StarAccess = perm
 			}
@@ -88,9 +88,9 @@ func convertToAccessNode(data map[string]interface{}) (*AccessNode, []string, er
 		default:
 			switch v := value.(type) {
 			case map[string]interface{}:
-				child, childGroups, err := convertToAccessNode(v)
+				child, childGroups, err := buildAccessNode(v)
 				if err != nil {
-					return nil, nil, fmt.Errorf("converting child node %s: %w", key, err)
+					return nil, nil, fmt.Errorf("building child node %s: %w", key, err)
 				}
 				if len(childGroups) > 0 {
 					groups = append(groups, childGroups...)
@@ -98,33 +98,32 @@ func convertToAccessNode(data map[string]interface{}) (*AccessNode, []string, er
 				node.Children[key] = child
 			default:
 				// Handle direct permission value
-				perm, err := convertToPermission(value)
+				perm, err := parsePermission(value)
 				if err != nil {
-					return nil, nil, fmt.Errorf("converting direct permission for %s: %w", key, err)
+					return nil, nil, fmt.Errorf("parsing permission for %s: %w", key, err)
 				}
-				// When a node has a direct permission value, it applies to both the node itself
-				// and all nodes below it
 				child := &AccessNode{
-					DotAccess:  perm, // Permission for the node itself
-					StarAccess: perm, // Default permission for children
+					DotAccess: perm,
+					StarAccess: perm,
 					Children:   make(map[string]*AccessNode),
 				}
 				node.Children[key] = child
 			}
 		}
 	}
-
 	return node, groups, nil
 }
 
-// convertToPermission converts a raw permission value into a Permission
-func convertToPermission(value interface{}) (Permission, error) {
+// parsePermission converts a raw permission value into a Permission
+func parsePermission(value interface{}) (Permission, error) {
 	switch v := value.(type) {
+	case float64:
+		return Permission(int(v)), nil
 	case int:
 		return Permission(v), nil
 	case Permission:
 		return v, nil
 	default:
-		return 0, fmt.Errorf("expected permission value to be an integer, got %T", value)
+		return Revoked, fmt.Errorf("invalid permission format: expected number or Permission, got %T", value)
 	}
 }

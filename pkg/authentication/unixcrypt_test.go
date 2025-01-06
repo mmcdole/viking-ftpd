@@ -44,7 +44,7 @@ func TestUnixCrypt(t *testing.T) {
 	t.Run("password verification", func(t *testing.T) {
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
-				err := hasher.VerifyPassword(tt.hash, tt.password)
+				err := hasher.VerifyPassword(tt.password, tt.hash)
 				if (err != nil) != tt.wantErr {
 					t.Errorf("VerifyPassword() error = %v, wantErr %v", err, tt.wantErr)
 				}

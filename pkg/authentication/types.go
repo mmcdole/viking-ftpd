@@ -1,43 +1,25 @@
+// Package authentication provides password verification and user authentication for the FTP server.
+// It supports multiple password hashing schemes and integrates with the user repository
+// to validate credentials.
 package authentication
 
-import (
-	"errors"
-	"time"
-)
+import "errors"
+
+// PasswordHashVerifier verifies that a plaintext password matches its hashed version
+type PasswordHashVerifier interface {
+	// VerifyPassword checks if a plaintext password matches its hashed version
+	VerifyPassword(plaintext, hashedPassword string) error
+}
 
 var (
-	ErrUserNotFound = errors.New("user not found")
-	ErrInvalidHash  = errors.New("invalid hash in character file")
+	// ErrInvalidUsername is returned when the username does not exist
+	ErrInvalidUsername = errors.New("invalid username")
+
+	// ErrInvalidPassword is returned when the password is incorrect
+	ErrInvalidPassword = errors.New("invalid password")
+
+	// ErrInvalidCredentials is returned to clients when authentication fails.
+	// This is a generic error that does not distinguish between invalid username or password
+	// for security reasons.
+	ErrInvalidCredentials = errors.New("invalid credentials")
 )
-
-// CharacterFile represents the parsed contents of a character file
-type CharacterFile struct {
-	Username     string
-	PasswordHash string
-	// Add other fields we might need later
-}
-
-// CharacterSource represents a source of character data
-type CharacterSource interface {
-	// LoadCharacter loads character data for a given username
-	// Returns ErrUserNotFound if the character doesn't exist
-	LoadCharacter(username string) (*CharacterFile, error)
-}
-
-// HashComparer provides methods for comparing passwords using Unix crypt-style hashing
-type HashComparer interface {
-	// Hash returns the hashed version of the password
-	// Returns an error if the password is invalid or if there's an internal error
-	Hash(password string) (string, error)
-
-	// VerifyPassword checks if a password matches its hashed version
-	// Returns nil on success, or an error on failure
-	VerifyPassword(hashedPassword, password string) error
-}
-
-// AuthenticatorConfig holds configuration for creating a new Authenticator
-type AuthenticatorConfig struct {
-	Source        CharacterSource
-	HashComparer  HashComparer
-	CacheDuration time.Duration
-}

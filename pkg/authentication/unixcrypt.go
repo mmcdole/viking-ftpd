@@ -22,7 +22,7 @@ func (h *UnixCrypt) Hash(password string) (string, error) {
 }
 
 // VerifyPassword checks if a password matches its hashed version
-func (h *UnixCrypt) VerifyPassword(hashedPassword, password string) error {
+func (h *UnixCrypt) VerifyPassword(password, hashedPassword string) error {
 	// Extract salt from the hash (first 2 characters)
 	if len(hashedPassword) < 2 {
 		return errors.New("invalid hash: too short")

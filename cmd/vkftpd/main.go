@@ -9,6 +9,7 @@ import (
 	"github.com/mmcdole/viking-ftpd/pkg/authorization"
 	"github.com/mmcdole/viking-ftpd/pkg/ftpserver"
 	"github.com/mmcdole/viking-ftpd/pkg/logging"
+	"github.com/mmcdole/viking-ftpd/pkg/users"
 	"github.com/spf13/cobra"
 )
 
@@ -16,6 +17,7 @@ var (
 	version     = "dev" // Will be set during build
 	cfgFile     string
 	showVersion bool
+	debug       bool
 )
 
 func main() {
@@ -82,19 +84,15 @@ Configuration file must be in JSON format with the following structure:
 			return fmt.Errorf("failed to initialize logging: %v", err)
 		}
 
-		// Create authorizer for permission checks
-		source := authorization.NewFileSource(config.AccessFilePath)
-		authorizer, err := authorization.NewAuthorizer(source, time.Duration(config.AccessCacheTime)*time.Second)
-		if err != nil {
-			return fmt.Errorf("failed to create authorizer: %v", err)
-		}
+		// Create user source
+		charSource := users.NewFileSource(config.CharacterDirPath)
 
 		// Create authenticator
-		charSource := authentication.NewFileSource(config.CharacterDirPath)
-		authenticator, err := authentication.NewAuthenticator(charSource, nil, time.Duration(config.CharacterCacheTime)*time.Second)
-		if err != nil {
-			return fmt.Errorf("failed to create authenticator: %v", err)
-		}
+		authenticator := authentication.NewAuthenticator(charSource, authentication.NewUnixCrypt())
+
+		// Create authorizer for permission checks
+		accessSource := authorization.NewAccessFileSource(config.AccessFilePath)
+		authorizer := authorization.NewAuthorizer(accessSource, charSource, time.Duration(config.AccessCacheTime)*time.Second)
 
 		// Create and start FTP server
 		server, err := ftpserver.New(&ftpserver.Config{
@@ -105,6 +103,7 @@ Configuration file must be in JSON format with the following structure:
 			PassiveTransferPorts: config.PassivePortRange,
 			TLSCertFile:          config.TLSCertFile,
 			TLSKeyFile:           config.TLSKeyFile,
+			Debug:                debug || config.Debug, // Use command line flag or config file
 		}, authorizer, authenticator)
 		if err != nil {
 			return fmt.Errorf("failed to create FTP server: %v", err)
@@ -116,6 +115,7 @@ Configuration file must be in JSON format with the following structure:
 }
 
 func init() {
-	rootCmd.Flags().StringVarP(&cfgFile, "config", "c", "", "path to config file (required)")
-	rootCmd.Flags().BoolVarP(&showVersion, "version", "v", false, "show version information")
+	rootCmd.PersistentFlags().StringVarP(&cfgFile, "config", "c", "", "config file path")
+	rootCmd.PersistentFlags().BoolVarP(&showVersion, "version", "v", false, "show version")
+	rootCmd.PersistentFlags().BoolVarP(&debug, "debug", "d", false, "enable debug logging")
 }

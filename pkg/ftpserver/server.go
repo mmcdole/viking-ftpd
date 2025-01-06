@@ -24,6 +24,7 @@ type Config struct {
 	PassiveTransferPorts [2]int
 	TLSCertFile          string // Path to TLS certificate file
 	TLSKeyFile           string // Path to TLS private key file
+	Debug                bool   // Enable debug logging in ftpserver
 }
 
 // Server wraps the FTP server with our custom auth
@@ -84,6 +85,9 @@ func (d *ftpDriver) GetSettings() (*ftpserverlib.Settings, error) {
 
 // ClientConnected is called when a client connects
 func (d *ftpDriver) ClientConnected(cc ftpserverlib.ClientContext) (string, error) {
+	if d.server.config.Debug {
+		cc.SetDebug(true)
+	}
 	logging.LogConnect(cc.RemoteAddr().String(), nil)
 	return "Welcome to Viking FTP server", nil
 }
@@ -96,11 +100,12 @@ func (d *ftpDriver) ClientDisconnected(cc ftpserverlib.ClientContext) {
 // AuthUser authenticates the user and returns a ClientDriver
 func (d *ftpDriver) AuthUser(cc ftpserverlib.ClientContext, user, pass string) (ftpserverlib.ClientDriver, error) {
 	// Authenticate user
-	if err := d.server.authenticator.Authenticate(user, pass); err != nil {
+	_, err := d.server.authenticator.Authenticate(user, pass)
+	if err != nil {
 		logging.LogAuth(user, cc.RemoteAddr().String(), err)
 		return nil, fmt.Errorf("authentication failed: %w", err)
 	}
-	logging.LogAuth(user, cc.RemoteAddr().String(), nil)
+
 	// Create filesystem with root already handled
 	fs := afero.NewBasePathFs(afero.NewOsFs(), d.server.config.RootDir)
 
@@ -116,6 +121,7 @@ func (d *ftpDriver) AuthUser(cc ftpserverlib.ClientContext, user, pass string) (
 	// Set initial path (home or root)
 	cc.SetPath(filepath.Join("/", homePath))
 
+	logging.LogAuth(user, cc.RemoteAddr().String(), nil)
 	return &ftpClient{
 		server:   d.server,
 		user:     user,
@@ -180,7 +186,7 @@ func (c *ftpClient) GetFS() afero.Fs {
 
 // ChangeCwd implements ftpserverlib.ClientDriverExtensionChdir
 func (c *ftpClient) ChangeCwd(path string) error {
-	if !c.server.authorizer.GetEffectivePermission(c.user, path).CanRead() {
+	if !c.server.authorizer.CanRead(c.user, path) {
 		logging.LogChdir(c.user, path, os.ErrPermission)
 		return os.ErrPermission
 	}
@@ -200,7 +206,7 @@ func (c *ftpClient) ReadDir(name string) ([]os.FileInfo, error) {
 		return nil, err
 	}
 
-	if !c.server.authorizer.GetEffectivePermission(c.user, path).CanRead() {
+	if !c.server.authorizer.CanRead(c.user, path) {
 		logging.LogReadDir(c.user, path, 0, os.ErrPermission)
 		return nil, os.ErrPermission
 	}
@@ -234,7 +240,7 @@ func (c *ftpClient) DeleteFile(name string) error {
 		return err
 	}
 
-	if !c.server.authorizer.GetEffectivePermission(c.user, path).CanWrite() {
+	if !c.server.authorizer.CanWrite(c.user, path) {
 		logging.LogDelete(c.user, path, os.ErrPermission)
 		return os.ErrPermission
 	}
@@ -250,7 +256,7 @@ func (c *ftpClient) DeleteFile(name string) error {
 
 // MakeDirectory is required by ftpserverlib for MKD command
 func (c *ftpClient) MakeDirectory(name string) error {
-	if !c.server.authorizer.GetEffectivePermission(c.user, name).CanWrite() {
+	if !c.server.authorizer.CanWrite(c.user, name) {
 		logging.LogMkdir(c.user, name, os.ErrPermission)
 		return os.ErrPermission
 	}
@@ -275,7 +281,7 @@ func (c *ftpClient) Open(name string) (afero.File, error) {
 		return nil, err
 	}
 
-	if !c.server.authorizer.GetEffectivePermission(c.user, path).CanRead() {
+	if !c.server.authorizer.CanRead(c.user, path) {
 		logging.LogOpen(c.user, path, logging.ModeRead, 0, os.ErrPermission)
 		return nil, os.ErrPermission
 	}
@@ -304,12 +310,12 @@ func (c *ftpClient) OpenFile(name string, flag int, perm os.FileMode) (afero.Fil
 
 	// Check write permission if file is being created or modified
 	if flag&(os.O_WRONLY|os.O_RDWR|os.O_APPEND|os.O_CREATE|os.O_TRUNC) != 0 {
-		if !c.server.authorizer.GetEffectivePermission(c.user, path).CanWrite() {
+		if !c.server.authorizer.CanWrite(c.user, path) {
 			logging.LogOpen(c.user, path, logging.ModeWrite, 0, os.ErrPermission)
 			return nil, os.ErrPermission
 		}
 		logging.LogOpen(c.user, path, logging.ModeWrite, 0, nil)
-	} else if !c.server.authorizer.GetEffectivePermission(c.user, path).CanRead() {
+	} else if !c.server.authorizer.CanRead(c.user, path) {
 		logging.LogOpen(c.user, path, logging.ModeRead, 0, os.ErrPermission)
 		return nil, os.ErrPermission
 	}
@@ -342,7 +348,7 @@ func (c *ftpClient) Create(name string) (afero.File, error) {
 		return nil, err
 	}
 
-	if !c.server.authorizer.GetEffectivePermission(c.user, path).CanWrite() {
+	if !c.server.authorizer.CanWrite(c.user, path) {
 		logging.LogCreate(c.user, path, os.ErrPermission)
 		return nil, os.ErrPermission
 	}
@@ -364,7 +370,7 @@ func (c *ftpClient) Mkdir(name string, perm os.FileMode) error {
 		return err
 	}
 
-	if !c.server.authorizer.GetEffectivePermission(c.user, path).CanWrite() {
+	if !c.server.authorizer.CanWrite(c.user, path) {
 		logging.LogMkdir(c.user, path, os.ErrPermission)
 		return os.ErrPermission
 	}
@@ -380,7 +386,7 @@ func (c *ftpClient) MkdirAll(path string, perm os.FileMode) error {
 		return err
 	}
 
-	if !c.server.authorizer.GetEffectivePermission(c.user, resolvedPath).CanWrite() {
+	if !c.server.authorizer.CanWrite(c.user, resolvedPath) {
 		logging.LogMkdir(c.user, resolvedPath, os.ErrPermission)
 		return os.ErrPermission
 	}
@@ -396,7 +402,7 @@ func (c *ftpClient) Remove(name string) error {
 		return err
 	}
 
-	if !c.server.authorizer.GetEffectivePermission(c.user, path).CanWrite() {
+	if !c.server.authorizer.CanWrite(c.user, path) {
 		logging.LogDelete(c.user, path, os.ErrPermission)
 		return os.ErrPermission
 	}
@@ -417,7 +423,7 @@ func (c *ftpClient) RemoveAll(path string) error {
 		return err
 	}
 
-	if !c.server.authorizer.GetEffectivePermission(c.user, resolvedPath).CanWrite() {
+	if !c.server.authorizer.CanWrite(c.user, resolvedPath) {
 		logging.LogDelete(c.user, resolvedPath, os.ErrPermission)
 		return os.ErrPermission
 	}
@@ -442,8 +448,8 @@ func (c *ftpClient) Rename(oldname, newname string) error {
 		return err
 	}
 
-	if !c.server.authorizer.GetEffectivePermission(c.user, oldPath).CanWrite() ||
-		!c.server.authorizer.GetEffectivePermission(c.user, newPath).CanWrite() {
+	if !c.server.authorizer.CanWrite(c.user, oldPath) ||
+		!c.server.authorizer.CanWrite(c.user, newPath) {
 		logging.LogRename(c.user, oldPath, newPath, os.ErrPermission)
 		return os.ErrPermission
 	}
@@ -464,7 +470,7 @@ func (c *ftpClient) Stat(name string) (os.FileInfo, error) {
 		return nil, err
 	}
 
-	if !c.server.authorizer.GetEffectivePermission(c.user, path).CanRead() {
+	if !c.server.authorizer.CanRead(c.user, path) {
 		return nil, os.ErrPermission
 	}
 	return c.fs.Stat(path)
@@ -482,7 +488,7 @@ func (c *ftpClient) Chmod(name string, mode os.FileMode) error {
 		return err
 	}
 
-	if !c.server.authorizer.GetEffectivePermission(c.user, path).CanWrite() {
+	if !c.server.authorizer.CanWrite(c.user, path) {
 		return os.ErrPermission
 	}
 	return c.fs.Chmod(path, mode)
@@ -495,7 +501,7 @@ func (c *ftpClient) Chown(name string, uid, gid int) error {
 		return err
 	}
 
-	if !c.server.authorizer.GetEffectivePermission(c.user, path).CanWrite() {
+	if !c.server.authorizer.CanWrite(c.user, path) {
 		return os.ErrPermission
 	}
 	return c.fs.Chown(path, uid, gid)
@@ -503,7 +509,7 @@ func (c *ftpClient) Chown(name string, uid, gid int) error {
 
 // Chtimes changes file times - part of afero.Fs interface
 func (c *ftpClient) Chtimes(name string, atime time.Time, mtime time.Time) error {
-	if !c.server.authorizer.GetEffectivePermission(c.user, name).CanWrite() {
+	if !c.server.authorizer.CanWrite(c.user, name) {
 		return os.ErrPermission
 	}
 	return c.fs.Chtimes(name, atime, mtime)
@@ -516,7 +522,7 @@ func (c *ftpClient) Size(name string) (int64, error) {
 		return 0, err
 	}
 
-	if !c.server.authorizer.GetEffectivePermission(c.user, path).CanRead() {
+	if !c.server.authorizer.CanRead(c.user, path) {
 		return 0, os.ErrPermission
 	}
 
@@ -535,7 +541,7 @@ func (c *ftpClient) ModTime(name string) (time.Time, error) {
 		return time.Time{}, err
 	}
 
-	if !c.server.authorizer.GetEffectivePermission(c.user, path).CanRead() {
+	if !c.server.authorizer.CanRead(c.user, path) {
 		return time.Time{}, os.ErrPermission
 	}
 

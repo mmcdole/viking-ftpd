@@ -3,17 +3,50 @@ package authorization
 import (
 	"testing"
 	"time"
+	"sort"
+	"reflect"
+
+	"github.com/mmcdole/viking-ftpd/pkg/users"
 )
 
-// mockSource provides a static data source for testing
-type mockSource struct {
-	data map[string]interface{}
+type mockUserSource struct {
+	users map[string]*users.User
 }
 
-func (m *mockSource) LoadRawData() (map[string]interface{}, error) {
-	return m.data, nil
+func newMockUserSource() *mockUserSource {
+	return &mockUserSource{
+		users: make(map[string]*users.User),
+	}
 }
 
+func (m *mockUserSource) LoadUser(username string) (*users.User, error) {
+	user, ok := m.users[username]
+	if !ok {
+		return nil, users.ErrUserNotFound
+	}
+	return user, nil
+}
+
+func (m *mockUserSource) addUser(username string, level int) {
+	m.users[username] = &users.User{
+		Username: username,
+		Level:    level,
+	}
+}
+
+type mockAccessSource struct {
+	tree map[string]interface{}
+}
+
+func newMockAccessSource(tree map[string]interface{}) *mockAccessSource {
+	return &mockAccessSource{tree: tree}
+}
+
+func (m *mockAccessSource) LoadAccessData() (map[string]interface{}, error) {
+	return m.tree, nil
+}
+
+// runTests is a helper function to run permission test cases
 type testCase struct {
 	name     string
 	username string
@@ -21,13 +54,12 @@ type testCase struct {
 	want     Permission
 }
 
-// runTests is a helper function to run permission test cases
 func runTests(t *testing.T, auth *Authorizer, cases []testCase) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got := auth.GetEffectivePermission(tc.username, tc.path)
+			got := auth.ResolvePermission(tc.username, tc.path)
 			if got != tc.want {
-				t.Errorf("GetEffectivePermission(%q, %q) = %v, want %v",
+				t.Errorf("ResolvePermission(%q, %q) = %v, want %v",
 					tc.username, tc.path, got, tc.want)
 			}
 		})
@@ -38,13 +70,14 @@ func runTests(t *testing.T, auth *Authorizer, cases []testCase) {
 func productionTree() map[string]interface{} {
 	return map[string]interface{}{
 		"access_map": map[string]interface{}{
-			// Default access tree for all users
 			"*": map[string]interface{}{
-				".":          Read,    // READ on root itself
-				"*":          Revoked, // REVOKED by default
-				"accounts":   Revoked,
-				"characters": Revoked,
-				"data":       Revoked,
+				".": Read, // Everyone can read root directory
+				"*": Revoked,
+				"accounts": Revoked,    // Private directory
+				"characters": Revoked,  // Private directory
+				"data": map[string]interface{}{
+					"*": Revoked, // Private directory
+				},
 				"log": map[string]interface{}{
 					"*":      Read,
 					"Driver": Revoked,
@@ -55,15 +88,8 @@ func productionTree() map[string]interface{} {
 				},
 				"tmp": Write,
 			},
-			// Documentation archwizard
-			"archwizard": map[string]interface{}{
-				"?": []interface{}{"Arch_doc"}, // Group membership
-				"d": map[string]interface{}{
-					"MyDomain": Write, // Personal domain with write access
-				},
-			},
 			// Domain wizard with specific area access
-			"wizard": map[string]interface{}{
+			"wizard1": map[string]interface{}{
 				"d": map[string]interface{}{
 					"MyRealm": Write,
 					"SharedRealm": map[string]interface{}{
@@ -72,15 +98,15 @@ func productionTree() map[string]interface{} {
 					},
 				},
 			},
-			// Groups
-			"Arch_doc": map[string]interface{}{
-				"doc": map[string]interface{}{
-					"*": GrantWrite, // Can grant write on documentation
-				},
-				"help": Write, // Can write help files
-				"com": map[string]interface{}{
-					"help": Write, // Can write command help
-				},
+			// Arch groups
+			"Arch_full": map[string]interface{}{
+				".": GrantGrant,
+				"*": GrantGrant,
+			},
+			"Arch_junior": map[string]interface{}{
+				".": GrantWrite,
+				"*": GrantWrite,
+				"secure": Write,
 			},
 		},
 	}
@@ -168,13 +194,15 @@ func groupTree() map[string]interface{} {
 			},
 		},
 	}
-}
+}	
 
 func TestProductionExample(t *testing.T) {
-	auth, err := NewAuthorizer(&mockSource{data: productionTree()}, time.Hour)
-	if err != nil {
-		t.Fatalf("Failed to create authorizer: %v", err)
-	}
+	// Create mock user source
+	source := newMockUserSource()
+	source.addUser("wizard1", users.WIZARD)
+
+
+	auth := NewAuthorizer(newMockAccessSource(productionTree()), source, time.Hour)
 
 	t.Run("DefaultAccess", func(t *testing.T) {
 		cases := []testCase{
@@ -189,55 +217,26 @@ func TestProductionExample(t *testing.T) {
 		runTests(t, auth, cases)
 	})
 
-	t.Run("ImplicitPermissions", func(t *testing.T) {
+	t.Run("DomainAccess", func(t *testing.T) {
 		cases := []testCase{
-			// Player's own directory permissions
-			{"own_dir_root", "wizard", "/players/wizard", GrantGrant},                         // Full access to own root
-			{"own_dir_file", "wizard", "/players/wizard/file.txt", GrantGrant},                // Full access to own files
-			{"own_dir_subdir", "wizard", "/players/wizard/subdir", GrantGrant},                // Full access to subdirs
-			{"own_dir_deep_file", "wizard", "/players/wizard/deep/path/file.txt", GrantGrant}, // Full access at any depth
-			{"own_open_dir", "wizard", "/players/wizard/open", GrantGrant},                    // Full access to own open dir
-
-			// Other players' open directory permissions
-			{"other_open_dir", "wizard", "/players/other/open", Read},            // Can read others' open dirs
-			{"archwizard_open_dir", "archwizard", "/players/someone/open", Read}, // Even archwizards only get read
-			{"anonymous_open_dir", "anonymous", "/players/anyone/open", Read},    // Anonymous can read open dirs
-
-			// Verify open dir only works at correct level
-			{"open_dir_file_denied", "anonymous", "/players/anyone/open/file.txt", Revoked}, // Can't read files in open
-			{"open_string_in_path", "anonymous", "/players/anyone/not_open", Revoked},       // 'open' must be exact dir name
-			{"deep_open_denied", "anonymous", "/players/anyone/subdir/open", Revoked},       // 'open' must be at right level
-		}
-		runTests(t, auth, cases)
-	})
-
-	t.Run("GroupAndDomainAccess", func(t *testing.T) {
-		cases := []testCase{
-			// Arch_doc group permissions
-			{"doc_grant_write", "archwizard", "/doc/manual.txt", GrantWrite},     // Can grant write on documentation
-			{"help_write", "archwizard", "/help/newbie.txt", Write},              // Can write help files
-			{"command_help_write", "archwizard", "/com/help/command.txt", Write}, // Can write command help files
-
-			// Personal domain access
-			{"own_domain_write", "archwizard", "/d/MyDomain/area.c", Write}, // Can write in personal domain
-
 			// Domain wizard permissions
-			{"realm_write", "wizard", "/d/MyRealm/room.c", Write},           // Full write in own realm
-			{"shared_realm_root", "wizard", "/d/SharedRealm", Write},        // Write at shared realm root
-			{"shared_realm_files", "wizard", "/d/SharedRealm/room.c", Read}, // Only read in shared files
-
-			// Interaction between group and implicit
-			{"doc_in_home", "archwizard", "/players/archwizard/doc.txt", GrantGrant}, // Home dir trumps group perms
-			{"open_with_domain", "wizard", "/players/wizard/open", GrantGrant},       // Home dir trumps domain perms
+			{"realm_write", "wizard1", "/d/MyRealm/room.c", Write},           // Full write in own realm
+			{"shared_realm_root", "wizard1", "/d/SharedRealm", Write},        // Write at shared realm root
+			{"shared_realm_files", "wizard1", "/d/SharedRealm/room.c", Read}, // Only read in shared files
 		}
 		runTests(t, auth, cases)
 	})
 }
 
 func TestCorePermissions(t *testing.T) {
-	auth, err := NewAuthorizer(&mockSource{data: coreTree()}, time.Hour)
-	if err != nil {
-		t.Fatalf("Failed to create authorizer: %v", err)
+	// Create mock user source
+	source := newMockUserSource()
+	source.addUser("user", users.WIZARD)      // Use WIZARD level for user-specific permissions
+	source.addUser("anonymous", users.WIZARD)  // Use WIZARD for testing basic permissions
+
+	auth := NewAuthorizer(newMockAccessSource(coreTree()), source, time.Hour)
+	if err := auth.refreshCache(); err != nil {
+		t.Fatalf("Failed to refresh cache: %v", err)
 	}
 
 	t.Run("DotVsStar", func(t *testing.T) {
@@ -298,9 +297,14 @@ func TestCorePermissions(t *testing.T) {
 }
 
 func TestGroupPermissions(t *testing.T) {
-	auth, err := NewAuthorizer(&mockSource{data: groupTree()}, time.Hour)
-	if err != nil {
-		t.Fatalf("Failed to create authorizer: %v", err)
+	// Create mock user source with test users - use WIZARD level since they need file access
+	source := newMockUserSource()
+	source.addUser("user1", users.WIZARD)  // WIZARD level for group membership tests
+	source.addUser("user2", users.WIZARD)  // WIZARD level for group membership tests
+
+	auth := NewAuthorizer(newMockAccessSource(groupTree()), source, time.Hour)
+	if err := auth.refreshCache(); err != nil {
+		t.Fatalf("Failed to refresh cache: %v", err)
 	}
 
 	t.Run("SingleGroup", func(t *testing.T) {
@@ -318,4 +322,140 @@ func TestGroupPermissions(t *testing.T) {
 		}
 		runTests(t, auth, cases)
 	})
+}
+
+func TestImplicitPermissions(t *testing.T) {
+	// Mock user source with various levels
+	source := newMockUserSource()
+	source.addUser("arch", users.ARCHWIZARD)    // Level 45
+	source.addUser("junior", users.JUNIOR_ARCH) // Level 40
+	source.addUser("elder", users.ELDER)        // Level 42
+	source.addUser("wizard", users.WIZARD)      // Level 31
+
+	auth := NewAuthorizer(newMockAccessSource(productionTree()), source, time.Hour)
+	if err := auth.refreshCache(); err != nil {
+		t.Fatalf("Failed to refresh cache: %v", err)
+	}
+
+	t.Run("PlayerDirectories", func(t *testing.T) {
+		cases := []testCase{
+			// Own directory access
+			{"wizard-own", "wizard", "/players/wizard", GrantGrant},
+			{"wizard-own-deep", "wizard", "/players/wizard/deep/path", GrantGrant},
+
+			// Other directory access
+			{"wizard-other", "wizard", "/players/arch", Revoked},
+			{"wizard-open", "wizard", "/players/arch/open", Read},
+
+			// Open directory restrictions
+			{"open-subdir", "wizard", "/players/arch/open/subdir", Revoked},
+			{"not-open", "wizard", "/players/arch/not_open", Revoked},
+			{"deep-open", "wizard", "/players/arch/deep/open", Revoked},
+
+			// Home directory trumps group permissions
+			{"home-trumps-group", "arch", "/players/arch/doc.txt", GrantGrant}, // Even with doc group, home dir wins
+			{"home-trumps-domain", "wizard", "/players/wizard/open", GrantGrant}, // Even with domain access, home dir wins
+		}
+		runTests(t, auth, cases)
+	})
+
+	t.Run("ImplicitGroups", func(t *testing.T) {
+		cases := []testCase{
+			// Arch_full group (level 45+)
+			{"arch-root", "arch", "/", GrantGrant},
+			{"arch-secure", "arch", "/secure", GrantGrant},
+			{"arch-domains", "arch", "/domains", GrantGrant},
+
+			// Arch_junior group (level 40-44, except elder)
+			{"junior-root", "junior", "/", GrantWrite},
+			{"junior-secure", "junior", "/secure", Write},
+			{"junior-domains", "junior", "/domains", GrantWrite},
+
+			// Elder (level 42) should not get junior arch permissions
+			{"elder-root", "elder", "/", Read},
+			{"elder-secure", "elder", "/secure", Revoked},
+			{"elder-domains", "elder", "/domains", Revoked},
+
+			// Regular wizard (level 31)
+			{"wizard-root", "wizard", "/", Read},
+			{"wizard-secure", "wizard", "/secure", Revoked},
+			{"wizard-domains", "wizard", "/domains", Revoked},
+		}
+		runTests(t, auth, cases)
+	})
+}
+
+func TestGroupMembership(t *testing.T) {
+	// Mock user source with various levels
+	source := newMockUserSource()
+	source.addUser("arch", users.ARCHWIZARD)    // Level 45
+	source.addUser("junior", users.JUNIOR_ARCH) // Level 40
+	source.addUser("elder", users.ELDER)        // Level 42
+	source.addUser("wizard", users.WIZARD)      // Level 31
+
+	// Create a test access tree that includes explicit group assignments
+	testTree := map[string]interface{}{
+		"access_map": map[string]interface{}{
+			"wizard": map[string]interface{}{
+				"?": []interface{}{"Wiz_domain", "Wiz_qc"},
+			},
+			"junior": map[string]interface{}{
+				"?": []interface{}{"Wiz_domain"},
+			},
+			// Arch groups
+			"Arch_full": map[string]interface{}{
+				".": GrantGrant,
+				"*": GrantGrant,
+			},
+			"Arch_junior": map[string]interface{}{
+				".": GrantWrite,
+				"*": GrantWrite,
+				"secure": Write,
+			},
+		},
+	}
+
+	auth := NewAuthorizer(newMockAccessSource(testTree), source, time.Hour)
+	if err := auth.refreshCache(); err != nil {
+		t.Fatalf("Failed to refresh cache: %v", err)
+	}
+
+	tests := []struct {
+		name     string
+		username string
+		want     []string
+	}{
+		{
+			name:     "arch gets implicit full",
+			username: "arch",
+			want:     []string{"Arch_full"},
+		},
+		{
+			name:     "junior gets implicit junior and explicit domain",
+			username: "junior",
+			want:     []string{"Arch_junior", "Wiz_domain"},
+		},
+		{
+			name:     "elder gets no groups",
+			username: "elder",
+			want:     []string{},
+		},
+		{
+			name:     "wizard gets only explicit groups",
+			username: "wizard",
+			want:     []string{"Wiz_domain", "Wiz_qc"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := auth.ResolveGroups(tt.username)
+			sort.Strings(got)
+			sort.Strings(tt.want)
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("ResolveGroups(%q) = %v (type %T), want %v (type %T)", 
+					tt.username, got, got, tt.want, tt.want)
+			}
+		})
+	}
 }

@@ -12,7 +12,6 @@ import (
 // The format is used to store and restore object state in DGD.
 type ObjectParser struct {
 	strict bool
-	file   string // Name of file being parsed
 }
 
 // NewObjectParser creates a new parser with the given options.
@@ -24,23 +23,14 @@ func NewObjectParser(strict bool) *ObjectParser {
 	}
 }
 
-// SetFile sets the name of the file being parsed
-func (p *ObjectParser) SetFile(file string) {
-	p.file = file
-}
-
 // ParseError represents an error that occurred while parsing a specific line
 type ParseError struct {
-	File     string // The file being parsed
 	Line     int    // The line number where the error occurred
 	Position int    // Position within the line where the error occurred
 	Err      error  // The specific error encountered
 }
 
 func (e *ParseError) Error() string {
-	if e.File != "" {
-		return fmt.Sprintf("Format error in \"%s\", line %d: %v", e.File, e.Line, e.Err)
-	}
 	return fmt.Sprintf("Format error at line %d: %v", e.Line, e.Err)
 }
 
@@ -101,13 +91,12 @@ func (p *ObjectParser) ParseObject(input string) (*ParseResult, error) {
 		lp := NewLineParser(line)
 		key, value, err := lp.ParseLine()
 		if err != nil {
-			// Create error with absolute file position
 			parseErr := &ParseError{
-				File:     p.file,
-				Line:     lineNum,
+				Line:     lineNum + 1,
 				Position: startPos + lp.pos,
 				Err:      err,
 			}
+
 			if p.strict {
 				return nil, parseErr
 			}

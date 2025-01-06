@@ -1,8 +1,11 @@
 package authorization
 
-import "time"
+// AccessSource provides access to the raw access tree data
+type AccessSource interface {
+	LoadAccessData() (map[string]interface{}, error)
+}
 
-// Permission represents an access level in the system
+// Permission represents the level of access granted
 type Permission int
 
 const (
@@ -29,39 +32,31 @@ func (p Permission) CanGrant() bool {
 	return p >= GrantGrant
 }
 
-// AccessNode represents a node in the access tree
-type AccessNode struct {
-	// Direct access level for this node
-	DotAccess Permission
-	// Default access level for children
-	StarAccess Permission
-	// Named child nodes
-	Children map[string]*AccessNode
-}
-
-// AccessTree represents the complete access hierarchy
+// AccessTree represents a node in the access permission tree
 type AccessTree struct {
-	// Root node of the tree
-	Root *AccessNode
-	// Groups this user belongs to (if this is a user tree)
+	Root   *AccessNode
 	Groups []string
 }
 
-// AccessSource represents a source of raw access data
-type AccessSource interface {
-	// LoadRawData loads the raw map structure that will be converted to AccessTrees
-	LoadRawData() (map[string]interface{}, error)
+// AccessNode represents a node in the access tree
+type AccessNode struct {
+	DotAccess  Permission
+	StarAccess Permission
+	Children   map[string]*AccessNode
 }
+
+// Group constants
+const (
+	GroupArchFull   = "Arch_full"
+	GroupArchJunior = "Arch_junior"
+	GroupArchDocs   = "Arch_docs"
+	GroupArchQC     = "Arch_qc"
+	GroupArchLaw    = "Arch_law"
+	GroupArchWeb    = "Arch_web"
+)
 
 // AuthorizerConfig holds the configuration for creating a new Authorizer
 type AuthorizerConfig struct {
-	// Source provides the access tree data
-	Source AccessSource
-
 	// DefaultPermission is used when no matching rule is found
 	DefaultPermission Permission
-
-	// CacheDuration specifies how long to cache the access tree
-	// If zero, caching is disabled and every check loads fresh data
-	CacheDuration time.Duration
 }
