@@ -51,6 +51,16 @@ func New(config *Config, authorizer *authorization.Authorizer, authenticator *au
 	driver := &ftpDriver{server: s}
 	s.server = ftpserverlib.NewFtpServer(driver)
 
+	// Create and set the FTP logger
+	logger, err := logging.New(logging.Config{
+		AccessLogPath: "access.log",
+		ErrorLogPath:  "error.log",
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create logger: %w", err)
+	}
+	s.server.Logger = NewFTPLogger(logger)
+
 	return s, nil
 }
 
