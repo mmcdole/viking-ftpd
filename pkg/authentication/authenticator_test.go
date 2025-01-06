@@ -41,7 +41,7 @@ type mockVerifier struct {
 	expectedPassword string
 }
 
-func (m *mockVerifier) VerifyPassword(hashedPassword, password string) error {
+func (m *mockVerifier) VerifyPassword(password, hashedPassword string) error {
 	if hashedPassword == m.expectedHash && password == m.expectedPassword {
 		return nil
 	}
@@ -75,16 +75,16 @@ func TestAuthenticator_Authenticate(t *testing.T) {
 			wantLevel: 1,
 		},
 		{
-			name:      "invalid password",
-			username:  "user1",
-			password:  "wrongpass",
-			wantErr:   ErrInvalidCredentials,
+			name:     "invalid password",
+			username: "user1",
+			password: "wrongpass",
+			wantErr:  ErrInvalidPassword,
 		},
 		{
-			name:      "user not found",
-			username:  "nonexistent",
-			password:  "testpass123",
-			wantErr:   ErrInvalidCredentials,
+			name:     "user not found",
+			username: "nonexistent",
+			password: "testpass123",
+			wantErr:  ErrInvalidUsername,
 		},
 	}
 
