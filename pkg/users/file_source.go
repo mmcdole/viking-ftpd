@@ -39,7 +39,7 @@ func (s *FileSource) getCharacterPath(username string) string {
 	}
 	// Get first letter of username for subdirectory
 	firstLetter := strings.ToLower(username[0:1])
-	path := filepath.Join(s.rootDir, "characters", firstLetter, username+".o")
+	path := filepath.Join(s.rootDir, firstLetter, username+".o")
 	log.Printf("Character path for user %s: %s", username, path)
 	return path
 }
