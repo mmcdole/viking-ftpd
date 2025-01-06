@@ -31,7 +31,7 @@ type testAccessSource struct {
 	perms map[string]Permission
 }
 
-func (s *testAccessSource) LoadRawData() (map[string]interface{}, error) {
+func (s *testAccessSource) LoadAccessData() (map[string]interface{}, error) {
 	data := make(map[string]interface{})
 	for path, perm := range s.perms {
 		data[path] = int(perm)

@@ -2,7 +2,7 @@ package authorization
 
 // AccessSource provides access to the raw access tree data
 type AccessSource interface {
-	LoadRawData() (map[string]interface{}, error)
+	LoadAccessData() (map[string]interface{}, error)
 }
 
 // Permission represents the level of access granted

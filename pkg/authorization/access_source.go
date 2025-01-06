@@ -19,8 +19,8 @@ func NewAccessFileSource(filePath string) *AccessFileSource {
 	}
 }
 
-// LoadRawData implements AccessSource
-func (s *AccessFileSource) LoadRawData() (map[string]interface{}, error) {
+// LoadAccessData implements AccessSource
+func (s *AccessFileSource) LoadAccessData() (map[string]interface{}, error) {
 	data, err := os.ReadFile(s.filePath)
 	if err != nil {
 		return nil, fmt.Errorf("reading access file: %w", err)

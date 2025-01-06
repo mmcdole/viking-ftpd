@@ -34,7 +34,7 @@ func (m *mockUserSource) addUser(username string, level int) {
 
 type mockAccessSource struct{}
 
-func (m *mockAccessSource) LoadRawData() (map[string]interface{}, error) {
+func (m *mockAccessSource) LoadAccessData() (map[string]interface{}, error) {
 	// Create a simple access map for testing
 	return map[string]interface{}{
 		"access_map": map[string]interface{}{
@@ -119,7 +119,7 @@ func TestAuthorizer_HasAccess(t *testing.T) {
 	}
 }
 
-func TestAuthorizer_GetGroups(t *testing.T) {
+func TestAuthorizer_ResolveGroups(t *testing.T) {
 	source := newMockUserSource()
 	source.addUser("admin", users.ADMINISTRATOR)
 	source.addUser("mortal", users.MORTAL_FIRST)
@@ -127,7 +127,7 @@ func TestAuthorizer_GetGroups(t *testing.T) {
 	auth := NewAuthorizer(&mockAccessSource{}, source, time.Hour)
 
 	// Test admin groups
-	adminGroups := auth.GetGroups("admin")
+	adminGroups := auth.ResolveGroups("admin")
 	if len(adminGroups) == 0 {
 		t.Error("Admin should belong to at least one group")
 	}
@@ -136,7 +136,7 @@ func TestAuthorizer_GetGroups(t *testing.T) {
 	}
 
 	// Test mortal groups
-	mortalGroups := auth.GetGroups("mortal")
+	mortalGroups := auth.ResolveGroups("mortal")
 	if len(mortalGroups) == 0 {
 		t.Error("Mortal should belong to at least one group")
 	}
@@ -145,7 +145,7 @@ func TestAuthorizer_GetGroups(t *testing.T) {
 	}
 
 	// Test non-existent user
-	nonexistentGroups := auth.GetGroups("nonexistent")
+	nonexistentGroups := auth.ResolveGroups("nonexistent")
 	if len(nonexistentGroups) != 0 {
 		t.Error("Non-existent user should not belong to any groups")
 	}

@@ -33,12 +33,12 @@ func NewAuthorizer(source AccessSource, characterData users.Source, cacheDuratio
 
 // HasPermission checks if a user has the required permission for a path
 func (a *Authorizer) HasPermission(username string, filepath string, requiredPerm Permission) bool {
-	effectivePerm := a.GetEffectivePermission(username, filepath)
+	effectivePerm := a.ResolvePermission(username, filepath)
 	return effectivePerm >= requiredPerm
 }
 
-// GetEffectivePermission returns the effective permission for a user on a path
-func (a *Authorizer) GetEffectivePermission(username string, filepath string) Permission {
+// ResolvePermission returns the effective permission for a user on a path
+func (a *Authorizer) ResolvePermission(username string, filepath string) Permission {
 	if err := a.ensureFreshCache(); err != nil {
 		return Revoked
 	}
@@ -54,22 +54,22 @@ func (a *Authorizer) GetEffectivePermission(username string, filepath string) Pe
 	}
 
 	// Check implicit permissions first
-	if implicitPerm, ok := a.getImplicitPermission(username, parts); ok {
+	if implicitPerm, ok := a.resolveImplicitPermission(username, parts); ok {
 		return implicitPerm
 	}
 
 	// Check user's direct permissions
 	if tree, ok := a.trees[username]; ok {
-		perm := a.checkNodePermission(tree.Root, parts)
+		perm := a.resolveNodePermission(tree.Root, parts)
 		if perm != Revoked {
 			return perm
 		}
 	}
 
 	// Check all group permissions (both explicit and implicit)
-	for _, group := range a.GetGroups(username) {
+	for _, group := range a.ResolveGroups(username) {
 		if tree, ok := a.trees[group]; ok {
-			perm := a.checkNodePermission(tree.Root, parts)
+			perm := a.resolveNodePermission(tree.Root, parts)
 			if perm != Revoked {
 				return perm
 			}
@@ -78,24 +78,24 @@ func (a *Authorizer) GetEffectivePermission(username string, filepath string) Pe
 
 	// Finally check default permissions
 	if tree, ok := a.trees["*"]; ok {
-		return a.checkNodePermission(tree.Root, parts)
+		return a.resolveNodePermission(tree.Root, parts)
 	}
 
 	return Revoked
 }
 
-// GetGroups returns all groups that a user belongs to, including both
+// ResolveGroups returns all groups that a user belongs to, including both
 // explicit groups from the access tree and implicit groups based on character level.
-func (a *Authorizer) GetGroups(username string) []string {
+func (a *Authorizer) ResolveGroups(username string) []string {
 	if err := a.ensureFreshCache(); err != nil {
 		return nil
 	}
 
 	// Get explicit groups
-	groups := a.GetUserGroups(username)
+	groups := a.GetExplicitGroups(username)
 
 	// Add implicit groups
-	implicitGroups := a.getImplicitGroups(username)
+	implicitGroups := a.resolveImplicitGroups(username)
 	if implicitGroups != nil {
 		groups = append(groups, implicitGroups...)
 	}
@@ -103,8 +103,8 @@ func (a *Authorizer) GetGroups(username string) []string {
 	return groups
 }
 
-// GetUserGroups returns the explicit groups a user belongs to from their access tree
-func (a *Authorizer) GetUserGroups(username string) []string {
+// GetExplicitGroups returns the explicit groups a user belongs to from their access tree
+func (a *Authorizer) GetExplicitGroups(username string) []string {
 	if err := a.ensureFreshCache(); err != nil {
 		return nil
 	}
@@ -122,23 +122,38 @@ func (a *Authorizer) GetUserGroups(username string) []string {
 	return tree.Groups
 }
 
+// CanRead checks if a user has read permission for a path
+func (a *Authorizer) CanRead(username string, filepath string) bool {
+	return a.ResolvePermission(username, filepath).CanRead()
+}
+
+// CanWrite checks if a user has write permission for a path
+func (a *Authorizer) CanWrite(username string, filepath string) bool {
+	return a.ResolvePermission(username, filepath).CanWrite()
+}
+
+// CanGrant checks if a user has grant permission for a path
+func (a *Authorizer) CanGrant(username string, filepath string) bool {
+	return a.ResolvePermission(username, filepath).CanGrant()
+}
+
 // refreshCache loads fresh data from the source
 func (a *Authorizer) refreshCache() error {
-	rawData, err := a.source.LoadRawData()
+	rawData, err := a.source.LoadAccessData()
 	if err != nil {
 		return fmt.Errorf("loading raw data: %w", err)
 	}
 
-	trees, err := ConvertToAccessTrees(rawData)
+	trees, err := BuildAccessTrees(rawData)
 	if err != nil {
-		return fmt.Errorf("converting access trees: %w", err)
+		return fmt.Errorf("building access trees: %w", err)
 	}
 
 	a.mu.Lock()
-	defer a.mu.Unlock()
-
 	a.trees = trees
 	a.lastRefresh = time.Now()
+	a.mu.Unlock()
+
 	return nil
 }
 
@@ -154,8 +169,8 @@ func (a *Authorizer) ensureFreshCache() error {
 	return nil
 }
 
-// getImplicitPermission returns any implicit permissions for a path and user
-func (a *Authorizer) getImplicitPermission(username string, parts []string) (Permission, bool) {
+// resolveImplicitPermission returns any implicit permissions for a path and user
+func (a *Authorizer) resolveImplicitPermission(username string, parts []string) (Permission, bool) {
 	if len(parts) >= 2 && parts[0] == "players" {
 		if parts[1] == username {
 			return GrantGrant, true // Users always have GRANT_GRANT on their own directory
@@ -168,8 +183,8 @@ func (a *Authorizer) getImplicitPermission(username string, parts []string) (Per
 	return Revoked, false
 }
 
-// getImplicitGroups returns implicit groups based on character level
-func (a *Authorizer) getImplicitGroups(username string) []string {
+// resolveImplicitGroups returns implicit groups based on character level
+func (a *Authorizer) resolveImplicitGroups(username string) []string {
 	user, err := a.characterData.LoadUser(username)
 	if err != nil {
 		return nil
@@ -192,8 +207,8 @@ func (a *Authorizer) getImplicitGroups(username string) []string {
 	return groups
 }
 
-// checkNodePermission recursively checks permissions in a node
-func (a *Authorizer) checkNodePermission(node *AccessNode, pathParts []string) Permission {
+// resolveNodePermission recursively checks permissions in a node
+func (a *Authorizer) resolveNodePermission(node *AccessNode, pathParts []string) Permission {
 	if node == nil {
 		return Revoked
 	}
@@ -209,7 +224,7 @@ func (a *Authorizer) checkNodePermission(node *AccessNode, pathParts []string) P
 
 	// Check if we have a direct match for the next path part
 	if child, ok := node.Children[pathParts[0]]; ok {
-		perm := a.checkNodePermission(child, pathParts[1:])
+		perm := a.resolveNodePermission(child, pathParts[1:])
 		if perm != Revoked {
 			return perm
 		}
@@ -217,7 +232,7 @@ func (a *Authorizer) checkNodePermission(node *AccessNode, pathParts []string) P
 
 	// Check if we have a wildcard match
 	if child, ok := node.Children["*"]; ok {
-		return a.checkNodePermission(child, pathParts[1:])
+		return a.resolveNodePermission(child, pathParts[1:])
 	}
 
 	return Revoked
