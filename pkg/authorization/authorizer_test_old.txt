@@ -1,52 +1,34 @@
 package authorization
 
 import (
+	"reflect"
+	"sort"
 	"testing"
 	"time"
-	"sort"
-	"reflect"
 
-	"github.com/mmcdole/viking-ftpd/pkg/users"
+	"github.com/mmcdole/viking-ftpd/pkg/playerdata"
 )
 
-type mockUserSource struct {
-	users map[string]*users.User
+// mockSource provides a static data source for testing
+type mockSource struct {
+	data map[string]interface{}
 }
 
-func newMockUserSource() *mockUserSource {
-	return &mockUserSource{
-		users: make(map[string]*users.User),
-	}
+func (m *mockSource) LoadRawData() (map[string]interface{}, error) {
+	return m.data, nil
 }
 
-func (m *mockUserSource) LoadUser(username string) (*users.User, error) {
-	user, ok := m.users[username]
-	if !ok {
-		return nil, users.ErrUserNotFound
-	}
-	return user, nil
+// mockCharData provides a mock implementation of playerdata.Source
+type mockCharData struct {
+	playerdata.Source
+	levels map[string]int
+	loadCharacter func(username string) (*playerdata.Character, error)
 }
 
-func (m *mockUserSource) addUser(username string, level int) {
-	m.users[username] = &users.User{
-		Username: username,
-		Level:    level,
-	}
+func (m *mockCharData) LoadCharacter(username string) (*playerdata.Character, error) {
+	return m.loadCharacter(username)
 }
 
-type mockAccessSource struct {
-	tree map[string]interface{}
-}
-
-func newMockAccessSource(tree map[string]interface{}) *mockAccessSource {
-	return &mockAccessSource{tree: tree}
-}
-
-func (m *mockAccessSource) LoadAccessData() (map[string]interface{}, error) {
-	return m.tree, nil
-}
-
-// runTests is a helper function to run permission test cases
 type testCase struct {
 	name     string
 	username string
@@ -54,12 +36,13 @@ type testCase struct {
 	want     Permission
 }
 
+// runTests is a helper function to run permission test cases
 func runTests(t *testing.T, auth *Authorizer, cases []testCase) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got := auth.ResolvePermission(tc.username, tc.path)
+			got := auth.GetEffectivePermission(tc.username, tc.path)
 			if got != tc.want {
-				t.Errorf("ResolvePermission(%q, %q) = %v, want %v",
+				t.Errorf("GetEffectivePermission(%q, %q) = %v, want %v",
 					tc.username, tc.path, got, tc.want)
 			}
 		})
@@ -194,16 +177,21 @@ func groupTree() map[string]interface{} {
 			},
 		},
 	}
-}	
+}
 
 func TestProductionExample(t *testing.T) {
-	// Create mock user source
-	source := newMockUserSource()
-	source.addUser("wizard", users.WIZARD)
-	source.addUser("arch", users.ADMINISTRATOR)
-	source.addUser("player", users.MORTAL_FIRST)
+	// Create empty mock character data source
+	charData := &mockCharData{
+		levels: map[string]int{},
+	}
+	charData.loadCharacter = func(username string) (*playerdata.Character, error) {
+		return nil, playerdata.ErrUserNotFound
+	}
 
-	auth := NewAuthorizer(newMockAccessSource(productionTree()), source, time.Hour)
+	auth, err := NewAuthorizer(&mockSource{data: productionTree()}, charData, time.Hour)
+	if err != nil {
+		t.Fatalf("Failed to create authorizer: %v", err)
+	}
 
 	t.Run("DefaultAccess", func(t *testing.T) {
 		cases := []testCase{
@@ -230,12 +218,18 @@ func TestProductionExample(t *testing.T) {
 }
 
 func TestCorePermissions(t *testing.T) {
-	// Create mock user source
-	source := newMockUserSource()
-	source.addUser("user", users.WIZARD)      // Use WIZARD level for user-specific permissions
-	source.addUser("anonymous", users.WIZARD)  // Use WIZARD for testing basic permissions
+	// Create empty mock character data source
+	charData := &mockCharData{
+		levels: map[string]int{},
+	}
+	charData.loadCharacter = func(username string) (*playerdata.Character, error) {
+		return nil, playerdata.ErrUserNotFound
+	}
 
-	auth := NewAuthorizer(newMockAccessSource(coreTree()), source, time.Hour)
+	auth, err := NewAuthorizer(&mockSource{data: coreTree()}, charData, time.Hour)
+	if err != nil {
+		t.Fatalf("Failed to create authorizer: %v", err)
+	}
 
 	t.Run("DotVsStar", func(t *testing.T) {
 		cases := []testCase{
@@ -295,12 +289,18 @@ func TestCorePermissions(t *testing.T) {
 }
 
 func TestGroupPermissions(t *testing.T) {
-	// Create mock user source with test users - use WIZARD level since they need file access
-	source := newMockUserSource()
-	source.addUser("user1", users.WIZARD)  // WIZARD level for group membership tests
-	source.addUser("user2", users.WIZARD)  // WIZARD level for group membership tests
+	// Create empty mock character data source
+	charData := &mockCharData{
+		levels: map[string]int{},
+	}
+	charData.loadCharacter = func(username string) (*playerdata.Character, error) {
+		return nil, playerdata.ErrUserNotFound
+	}
 
-	auth := NewAuthorizer(newMockAccessSource(groupTree()), source, time.Hour)
+	auth, err := NewAuthorizer(&mockSource{data: groupTree()}, charData, time.Hour)
+	if err != nil {
+		t.Fatalf("Failed to create authorizer: %v", err)
+	}
 
 	t.Run("SingleGroup", func(t *testing.T) {
 		cases := []testCase{
@@ -320,14 +320,32 @@ func TestGroupPermissions(t *testing.T) {
 }
 
 func TestImplicitPermissions(t *testing.T) {
-	// Mock user source with various levels
-	source := newMockUserSource()
-	source.addUser("arch", users.ARCHWIZARD)    // Level 45
-	source.addUser("junior", users.JUNIOR_ARCH) // Level 40
-	source.addUser("elder", users.ELDER)        // Level 42
-	source.addUser("wizard", users.WIZARD)      // Level 31
+	// Mock character data source with various levels
+	charData := &mockCharData{
+		levels: map[string]int{
+			"arch":   45, // ARCHWIZARD
+			"junior": 40, // JUNIOR_ARCH
+			"elder":  42, // ELDER
+			"wizard": 31, // WIZARD
+		},
+	}
 
-	auth := NewAuthorizer(newMockAccessSource(productionTree()), source, time.Hour)
+	// Set up LoadCharacter function
+	charData.loadCharacter = func(username string) (*playerdata.Character, error) {
+		if level, ok := charData.levels[username]; ok {
+			return &playerdata.Character{
+				Username: username,
+				Level:    level,
+			}, nil
+		}
+		return nil, playerdata.ErrUserNotFound
+	}
+
+	// Create an authorizer with the mock character data source
+	auth, err := NewAuthorizer(&mockSource{data: productionTree()}, charData, time.Hour)
+	if err != nil {
+		t.Fatalf("NewAuthorizer() error = %v", err)
+	}
 
 	t.Run("PlayerDirectories", func(t *testing.T) {
 		cases := []testCase{
@@ -378,12 +396,26 @@ func TestImplicitPermissions(t *testing.T) {
 }
 
 func TestGroupMembership(t *testing.T) {
-	// Mock user source with various levels
-	source := newMockUserSource()
-	source.addUser("arch", users.ARCHWIZARD)    // Level 45
-	source.addUser("junior", users.JUNIOR_ARCH) // Level 40
-	source.addUser("elder", users.ELDER)        // Level 42
-	source.addUser("wizard", users.WIZARD)      // Level 31
+	// Mock character data source with various levels
+	charData := &mockCharData{
+		levels: map[string]int{
+			"arch":   45, // ARCHWIZARD
+			"junior": 40, // JUNIOR_ARCH
+			"elder":  42, // ELDER
+			"wizard": 31, // WIZARD
+		},
+	}
+
+	// Set up LoadCharacter function
+	charData.loadCharacter = func(username string) (*playerdata.Character, error) {
+		if level, ok := charData.levels[username]; ok {
+			return &playerdata.Character{
+				Username: username,
+				Level:    level,
+			}, nil
+		}
+		return nil, playerdata.ErrUserNotFound
+	}
 
 	// Create a test access tree that includes explicit group assignments
 	testTree := map[string]interface{}{
@@ -407,7 +439,10 @@ func TestGroupMembership(t *testing.T) {
 		},
 	}
 
-	auth := NewAuthorizer(newMockAccessSource(testTree), source, time.Hour)
+	auth, err := NewAuthorizer(&mockSource{data: testTree}, charData, time.Hour)
+	if err != nil {
+		t.Fatalf("NewAuthorizer() error = %v", err)
+	}
 
 	tests := []struct {
 		name     string
@@ -417,12 +452,12 @@ func TestGroupMembership(t *testing.T) {
 		{
 			name:     "arch gets implicit full",
 			username: "arch",
-			want:     []string{"Arch_full"},
+			want:     []string{GroupArchFull},
 		},
 		{
 			name:     "junior gets implicit junior and explicit domain",
 			username: "junior",
-			want:     []string{"Arch_junior", "Wiz_domain"},
+			want:     []string{GroupArchJunior, "Wiz_domain"},
 		},
 		{
 			name:     "elder gets no groups",
@@ -438,12 +473,11 @@ func TestGroupMembership(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := auth.ResolveGroups(tt.username)
+			got := auth.GetGroups(tt.username)
 			sort.Strings(got)
 			sort.Strings(tt.want)
 			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("ResolveGroups(%q) = %v (type %T), want %v (type %T)", 
-					tt.username, got, got, tt.want, tt.want)
+				t.Errorf("GetGroups(%q) = %v (type %T), want %v (type %T)", tt.username, got, got, tt.want, tt.want)
 			}
 		})
 	}
