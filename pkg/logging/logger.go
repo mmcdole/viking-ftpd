@@ -26,7 +26,6 @@ const (
 	OpAuth       Operation = "AUTH"       // Authentication attempt
 	OpConnect    Operation = "CONNECT"    // Client connection
 	OpDisconnect Operation = "DISCONNECT" // Client disconnection
-	OpCommand    Operation = "COMMAND"    // FTP command
 )
 
 // Mode represents file access mode
@@ -48,8 +47,6 @@ type Entry struct {
 	Entries   int       // For readdir operations
 	IP        string    // For auth/connect operations
 	Size      int64     // For file operations
-	Command   string    // For command operations
-	Args      []string  // For command operations
 	Error     error
 	Time      time.Time
 }
@@ -138,16 +135,6 @@ func formatMessage(e Entry) string {
 	// Number of entries for readdir operations
 	if e.Entries > 0 {
 		msg.WriteString(fmt.Sprintf(" [Entries: %d]", e.Entries))
-	}
-
-	// Command and args for command operations
-	if e.Command != "" {
-		argsStr := strings.Join(e.Args, " ")
-		if argsStr != "" {
-			msg.WriteString(fmt.Sprintf(" [Command: '%s %s']", e.Command, argsStr))
-		} else {
-			msg.WriteString(fmt.Sprintf(" [Command: '%s']", e.Command))
-		}
 	}
 
 	// Error or success
@@ -288,16 +275,6 @@ func (l *Logger) LogDisconnect(ip string) {
 	})
 }
 
-// LogCommand logs FTP commands received from clients
-func (l *Logger) LogCommand(command string, args []string, err error) {
-	l.Log(Entry{
-		Operation: OpCommand,
-		Command:   command,
-		Args:      args,
-		Error:     err,
-	})
-}
-
 // Package level functions that use defaultLogger
 var defaultLogger *Logger
 
@@ -378,11 +355,5 @@ func LogConnect(ip string, err error) {
 func LogDisconnect(ip string) {
 	if defaultLogger != nil {
 		defaultLogger.LogDisconnect(ip)
-	}
-}
-
-func LogCommand(command string, args []string, err error) {
-	if defaultLogger != nil {
-		defaultLogger.LogCommand(command, args, err)
 	}
 }

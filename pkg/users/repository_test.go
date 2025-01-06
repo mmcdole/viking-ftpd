@@ -59,16 +59,19 @@ func TestRepository(t *testing.T) {
 			t.Error("cache returned updated data instead of cached data")
 		}
 
-		// Wait for cache to expire
-		time.Sleep(150 * time.Millisecond)
+		// Force refresh from source
+		err = repository.RefreshUser("testuser")
+		if err != nil {
+			t.Fatalf("refresh failed: %v", err)
+		}
 
-		// Should get updated data
+		// Should get updated data immediately
 		user, err = repository.GetUser("testuser")
 		if err != nil {
-			t.Fatalf("access after cache expiry failed: %v", err)
+			t.Fatalf("access after refresh failed: %v", err)
 		}
 		if user.Level != ADMINISTRATOR {
-			t.Error("cache did not return updated data after expiry")
+			t.Error("did not get updated data after refresh")
 		}
 	})
 

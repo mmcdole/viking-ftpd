@@ -40,52 +40,32 @@ func (m *mockAccessSource) LoadAccessData() (map[string]interface{}, error) {
 		"access_map": map[string]interface{}{
 			"*": map[string]interface{}{
 				"test": map[string]interface{}{
-					".": 0, // Revoked
-					"*": 0, // Revoked
+					".": Revoked,
+					"*": Revoked,
 				},
 				"public": map[string]interface{}{
-					".": 0, // Revoked
-					"*": 0, // Revoked
+					".": Read,
+					"*": Read,
 				},
 				"admin": map[string]interface{}{
-					".": 0, // Revoked
-					"*": 0, // Revoked
+					".": Revoked,
+					"*": Revoked,
 				},
 			},
 			"admin": map[string]interface{}{
 				"?": []interface{}{"admin_group"},
 				"admin": map[string]interface{}{
-					".": 2, // Write
-					"*": 2, // Write
+					".": Write,
+					"*": Write,
 				},
 				"test": map[string]interface{}{
-					".": 2, // Write
-					"*": 2, // Write
+					".": Write,
+					"*": Write,
 				},
 			},
-			"mortal": map[string]interface{}{
-				"?": []interface{}{"mortal_group"},
-				"public": map[string]interface{}{
-					".": 1, // Read
-					"*": 1, // Read
-				},
-			},
-			"admin_group": map[string]interface{}{
-				"test": map[string]interface{}{
-					".": 2, // Write
-					"*": 2, // Write
-				},
-				"admin": map[string]interface{}{
-					".": 2, // Write
-					"*": 2, // Write
-				},
-			},
-			"mortal_group": map[string]interface{}{
-				"public": map[string]interface{}{
-					".": 1, // Read
-					"*": 1, // Read
-				},
-			},
+		},
+		"groups": map[string]interface{}{
+			"admin_group": []interface{}{"admin"},
 		},
 	}, nil
 }

@@ -53,13 +53,15 @@ func (r *Repository) GetUser(username string) (*User, error) {
 	return user, nil
 }
 
-// RefreshUser forces a refresh of user data
+// RefreshUser forces a refresh of user data from the source
 func (r *Repository) RefreshUser(username string) error {
+	// Load fresh data first before acquiring lock
 	user, err := r.source.LoadUser(username)
 	if err != nil {
 		return err
 	}
 
+	// Update cache with fresh data
 	r.mu.Lock()
 	r.cache[username] = user
 	r.lastRefresh[username] = time.Now()

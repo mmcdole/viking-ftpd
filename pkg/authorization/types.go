@@ -9,12 +9,12 @@ type AccessSource interface {
 type Permission int
 
 const (
-	Revoked Permission = iota
-	Read
-	Write
-	GrantRead
-	GrantWrite
-	GrantGrant
+	Revoked    Permission = -1
+	Read       Permission = 1
+	GrantRead  Permission = 2
+	Write      Permission = 3
+	GrantWrite Permission = 4
+	GrantGrant Permission = 5
 )
 
 // CanRead returns true if the permission allows reading
