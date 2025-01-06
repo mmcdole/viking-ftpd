@@ -236,6 +236,9 @@ func TestCorePermissions(t *testing.T) {
 	source.addUser("anonymous", users.WIZARD)  // Use WIZARD for testing basic permissions
 
 	auth := NewAuthorizer(newMockAccessSource(coreTree()), source, time.Hour)
+	if err := auth.refreshCache(); err != nil {
+		t.Fatalf("Failed to refresh cache: %v", err)
+	}
 
 	t.Run("DotVsStar", func(t *testing.T) {
 		cases := []testCase{
@@ -301,6 +304,9 @@ func TestGroupPermissions(t *testing.T) {
 	source.addUser("user2", users.WIZARD)  // WIZARD level for group membership tests
 
 	auth := NewAuthorizer(newMockAccessSource(groupTree()), source, time.Hour)
+	if err := auth.refreshCache(); err != nil {
+		t.Fatalf("Failed to refresh cache: %v", err)
+	}
 
 	t.Run("SingleGroup", func(t *testing.T) {
 		cases := []testCase{
@@ -328,6 +334,9 @@ func TestImplicitPermissions(t *testing.T) {
 	source.addUser("wizard", users.WIZARD)      // Level 31
 
 	auth := NewAuthorizer(newMockAccessSource(productionTree()), source, time.Hour)
+	if err := auth.refreshCache(); err != nil {
+		t.Fatalf("Failed to refresh cache: %v", err)
+	}
 
 	t.Run("PlayerDirectories", func(t *testing.T) {
 		cases := []testCase{
@@ -408,6 +417,9 @@ func TestGroupMembership(t *testing.T) {
 	}
 
 	auth := NewAuthorizer(newMockAccessSource(testTree), source, time.Hour)
+	if err := auth.refreshCache(); err != nil {
+		t.Fatalf("Failed to refresh cache: %v", err)
+	}
 
 	tests := []struct {
 		name     string

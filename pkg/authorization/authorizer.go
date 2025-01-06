@@ -88,11 +88,14 @@ func (a *Authorizer) ResolvePermission(username string, filepath string) Permiss
 // explicit groups from the access tree and implicit groups based on character level.
 func (a *Authorizer) ResolveGroups(username string) []string {
 	if err := a.ensureFreshCache(); err != nil {
-		return nil
+		return []string{}
 	}
 
 	// Get explicit groups
 	groups := a.GetExplicitGroups(username)
+	if groups == nil {
+		groups = []string{}
+	}
 
 	// Add implicit groups
 	implicitGroups := a.resolveImplicitGroups(username)
@@ -106,7 +109,7 @@ func (a *Authorizer) ResolveGroups(username string) []string {
 // GetExplicitGroups returns the explicit groups a user belongs to from their access tree
 func (a *Authorizer) GetExplicitGroups(username string) []string {
 	if err := a.ensureFreshCache(); err != nil {
-		return nil
+		return []string{}
 	}
 
 	a.mu.RLock()
@@ -115,10 +118,13 @@ func (a *Authorizer) GetExplicitGroups(username string) []string {
 	// Get user's tree
 	tree, ok := a.trees[username]
 	if !ok || tree == nil {
-		return nil
+		return []string{}
 	}
 
 	// Groups are stored in the tree itself
+	if tree.Groups == nil {
+		return []string{}
+	}
 	return tree.Groups
 }
 
@@ -187,10 +193,10 @@ func (a *Authorizer) resolveImplicitPermission(username string, parts []string) 
 func (a *Authorizer) resolveImplicitGroups(username string) []string {
 	user, err := a.characterData.LoadUser(username)
 	if err != nil {
-		return nil
+		return []string{}
 	}
 
-	var groups []string
+	groups := make([]string, 0)
 
 	// Check if the groups exist in the access map before adding them
 	a.mu.RLock()
@@ -213,27 +219,27 @@ func (a *Authorizer) resolveNodePermission(node *AccessNode, pathParts []string)
 		return Revoked
 	}
 
-	// If we've reached the end of the path, return this node's permission
+	// At the target node (final node)
 	if len(pathParts) == 0 {
 		// At final node, dot access overrides star access
 		if node.DotAccess != Revoked {
 			return node.DotAccess
 		}
+		// No dot access, use star access
 		return node.StarAccess
 	}
 
-	// Check if we have a direct match for the next path part
-	if child, ok := node.Children[pathParts[0]]; ok {
-		perm := a.resolveNodePermission(child, pathParts[1:])
-		if perm != Revoked {
-			return perm
-		}
+	part := pathParts[0]
+	rest := pathParts[1:]
+
+	// Check for exact match in children
+	if child, ok := node.Children[part]; ok {
+		// Recursively check child permissions
+		childPerm := a.resolveNodePermission(child, rest)
+		// If child returns Revoked, that's final - don't fall back to star access
+		return childPerm
 	}
 
-	// Check if we have a wildcard match
-	if child, ok := node.Children["*"]; ok {
-		return a.resolveNodePermission(child, pathParts[1:])
-	}
-
-	return Revoked
+	// No matching child, use star access
+	return node.StarAccess
 }

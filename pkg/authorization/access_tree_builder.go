@@ -104,7 +104,7 @@ func buildAccessNode(data map[string]interface{}) (*AccessNode, []string, error)
 				}
 				child := &AccessNode{
 					DotAccess: perm,
-					StarAccess: Revoked,
+					StarAccess: perm,
 					Children:   make(map[string]*AccessNode),
 				}
 				node.Children[key] = child
@@ -121,7 +121,9 @@ func parsePermission(value interface{}) (Permission, error) {
 		return Permission(int(v)), nil
 	case int:
 		return Permission(v), nil
+	case Permission:
+		return v, nil
 	default:
-		return Revoked, fmt.Errorf("invalid permission format: expected number, got %T", value)
+		return Revoked, fmt.Errorf("invalid permission format: expected number or Permission, got %T", value)
 	}
 }
