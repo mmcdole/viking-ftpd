@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/mmcdole/viking-ftpd/pkg/lpc"
+	"github.com/mmcdole/viking-ftpd/pkg/users"
 )
 
 const (
@@ -14,16 +14,16 @@ const (
 	PasswordField = "password"
 )
 
-// FileSource loads character data from LPC object files
+// FileSource implements Source using the filesystem
 type FileSource struct {
-	// CharacterDir is the path to the directory containing character subdirectories
-	CharacterDir string
+	// rootDir is the path to the directory containing user subdirectories
+	rootDir string
 }
 
 // NewFileSource creates a new FileSource
-func NewFileSource(characterDir string) *FileSource {
+func NewFileSource(rootDir string) *FileSource {
 	return &FileSource{
-		CharacterDir: characterDir,
+		rootDir: rootDir,
 	}
 }
 
@@ -34,40 +34,37 @@ func (s *FileSource) getCharacterPath(username string) string {
 	}
 	// Get first letter of username for subdirectory
 	firstLetter := strings.ToLower(username[0:1])
-	return filepath.Join(s.CharacterDir, firstLetter, username+".o")
+	return filepath.Join(s.rootDir, firstLetter, username+".o")
 }
 
-// LoadCharacter implements CharacterSource
-func (s *FileSource) LoadCharacter(username string) (*CharacterFile, error) {
-	path := s.getCharacterPath(username)
-	if path == "" {
+// LoadUser implements Source
+func (s *FileSource) LoadUser(username string) (*users.User, error) {
+	if username == "" {
 		return nil, fmt.Errorf("invalid username")
 	}
+
+	// Get first letter of username for subdirectory
+	firstLetter := strings.ToLower(username[0:1])
+	path := filepath.Join(s.rootDir, "characters", firstLetter, username+".o")
 
 	// Check if file exists
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil, ErrUserNotFound
+			return nil, users.ErrUserNotFound
 		}
-		return nil, fmt.Errorf("reading character file: %w", err)
+		return nil, fmt.Errorf("reading user file: %w", err)
 	}
 
-	// Parse LPC object
-	parser := lpc.NewObjectParser(false)  // non-strict mode
-	result, err := parser.ParseObject(string(data))
+	// Parse user data
+	user, err := users.ParseUserFile(data)
 	if err != nil {
-		return nil, fmt.Errorf("parsing character file: %w", err)
+		if err == users.ErrInvalidHash {
+			return nil, users.ErrInvalidHash
+		}
+		return nil, fmt.Errorf("parsing user file: %w", err)
 	}
 
-	// Extract password hash - continue even if there were some parsing errors
-	passwordHash, ok := result.Object[PasswordField].(string)
-	if !ok {
-		return nil, ErrInvalidHash
-	}
-
-	return &CharacterFile{
-		Username:     username,
-		PasswordHash: passwordHash,
-	}, nil
+	user.Username = username
+	return user, nil
 }

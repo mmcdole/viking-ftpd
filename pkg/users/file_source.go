@@ -1,4 +1,4 @@
-package playerdata
+package users
 
 import (
 	"fmt"
@@ -12,35 +12,35 @@ import (
 const (
 	// PasswordField is the field name in LPC object files that contains the password hash
 	PasswordField = "password"
-	// LevelField is the field name for the character's level
+	// LevelField is the field name for the user's level
 	LevelField = "level"
 )
 
 // FileSource implements Source using the filesystem
 type FileSource struct {
-	// CharacterDir is the path to the directory containing character subdirectories
-	CharacterDir string
+	// rootDir is the path to the directory containing user subdirectories
+	rootDir string
 }
 
 // NewFileSource creates a new FileSource
-func NewFileSource(characterDir string) *FileSource {
+func NewFileSource(rootDir string) *FileSource {
 	return &FileSource{
-		CharacterDir: characterDir,
+		rootDir: rootDir,
 	}
 }
 
-// getCharacterPath returns the full path to a character file
+// getCharacterPath returns the full path to a user file
 func (s *FileSource) getCharacterPath(username string) string {
 	if username == "" {
 		return ""
 	}
 	// Get first letter of username for subdirectory
 	firstLetter := strings.ToLower(username[0:1])
-	return filepath.Join(s.CharacterDir, firstLetter, username+".o")
+	return filepath.Join(s.rootDir, "characters", firstLetter, username+".o")
 }
 
-// LoadCharacter implements Source
-func (s *FileSource) LoadCharacter(username string) (*Character, error) {
+// LoadUser implements Source
+func (s *FileSource) LoadUser(username string) (*User, error) {
 	path := s.getCharacterPath(username)
 	if path == "" {
 		return nil, fmt.Errorf("invalid username")
@@ -52,31 +52,40 @@ func (s *FileSource) LoadCharacter(username string) (*Character, error) {
 		if os.IsNotExist(err) {
 			return nil, ErrUserNotFound
 		}
-		return nil, fmt.Errorf("reading character file: %w", err)
+		return nil, fmt.Errorf("reading user file: %w", err)
 	}
 
 	// Parse LPC object
-	parser := lpc.NewObjectParser(false) // non-strict mode
+	parser := lpc.NewObjectParser(false) // non-strict mode for better error handling
 	result, err := parser.ParseObject(string(data))
 	if err != nil {
-		return nil, fmt.Errorf("parsing character file: %w", err)
+		return nil, fmt.Errorf("parsing user file: %w", err)
 	}
 
 	// Extract password hash
-	passwordHash, ok := result.Object[PasswordField].(string)
+	passwordRaw, ok := result.Object[PasswordField]
+	if !ok {
+		return nil, ErrInvalidHash
+	}
+	passwordHash, ok := passwordRaw.(string)
 	if !ok {
 		return nil, ErrInvalidHash
 	}
 
 	// Extract level, defaulting to MORTAL_FIRST if not found
-	level := MORTAL_FIRST
-	if levelVal, ok := result.Object[LevelField].(float64); ok {
-		level = int(levelVal)
+	level := MORTAL_FIRST // Default to mortal if not found
+	if levelRaw, ok := result.Object[LevelField]; ok {
+		switch v := levelRaw.(type) {
+		case float64:
+			level = int(v)
+		case int:
+			level = v
+		}
 	}
 
-	return &Character{
+	return &User{
 		Username:     username,
 		PasswordHash: passwordHash,
-		Level:        level,
+		Level:       level,
 	}, nil
 }

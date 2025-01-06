@@ -96,11 +96,12 @@ func (d *ftpDriver) ClientDisconnected(cc ftpserverlib.ClientContext) {
 // AuthUser authenticates the user and returns a ClientDriver
 func (d *ftpDriver) AuthUser(cc ftpserverlib.ClientContext, user, pass string) (ftpserverlib.ClientDriver, error) {
 	// Authenticate user
-	if err := d.server.authenticator.Authenticate(user, pass); err != nil {
+	_, err := d.server.authenticator.Authenticate(user, pass)
+	if err != nil {
 		logging.LogAuth(user, cc.RemoteAddr().String(), err)
 		return nil, fmt.Errorf("authentication failed: %w", err)
 	}
-	logging.LogAuth(user, cc.RemoteAddr().String(), nil)
+
 	// Create filesystem with root already handled
 	fs := afero.NewBasePathFs(afero.NewOsFs(), d.server.config.RootDir)
 
@@ -116,6 +117,7 @@ func (d *ftpDriver) AuthUser(cc ftpserverlib.ClientContext, user, pass string) (
 	// Set initial path (home or root)
 	cc.SetPath(filepath.Join("/", homePath))
 
+	logging.LogAuth(user, cc.RemoteAddr().String(), nil)
 	return &ftpClient{
 		server:   d.server,
 		user:     user,
@@ -545,4 +547,18 @@ func (c *ftpClient) ModTime(name string) (time.Time, error) {
 	}
 
 	return info.ModTime(), nil
+}
+
+// ftpCommandDriver implements ftpserverlib.Driver
+type ftpCommandDriver struct {
+	cc ftpserverlib.ClientContext
+}
+
+func (d *ftpCommandDriver) HandleCommand(command string, args []string) error {
+	logging.LogCommand(command, args, nil)
+	return nil
+}
+
+func (d *ftpDriver) GetCommandDriver(cc ftpserverlib.ClientContext) (interface{}, error) {
+	return &ftpCommandDriver{cc: cc}, nil
 }

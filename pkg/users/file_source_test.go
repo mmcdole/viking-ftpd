@@ -1,11 +1,9 @@
-package authentication
+package users
 
 import (
 	"os"
 	"path/filepath"
 	"testing"
-
-	"github.com/mmcdole/viking-ftpd/pkg/users"
 )
 
 func TestFileSource_LoadUser(t *testing.T) {
@@ -51,7 +49,7 @@ gender 1`
 
 	// Test non-existent user
 	user, err = source.LoadUser("nonexistent")
-	if err != users.ErrUserNotFound {
+	if err != ErrUserNotFound {
 		t.Errorf("Expected ErrUserNotFound, got %v", err)
 	}
 
@@ -87,7 +85,28 @@ gender 1`
 	}
 
 	user, err = source.LoadUser("nopass")
-	if err != users.ErrInvalidHash {
+	if err != ErrInvalidHash {
 		t.Errorf("Expected ErrInvalidHash, got %v", err)
+	}
+
+	// Test default level
+	defaultDir := filepath.Join(tempDir, "characters", "d")
+	if err := os.MkdirAll(defaultDir, 0755); err != nil {
+		t.Fatalf("Failed to create default dir: %v", err)
+	}
+	defaultLevelFile := filepath.Join(defaultDir, "default.o")
+	defaultLevelData := `password "hashedpass"
+cap_name "Default"
+gender 1`
+	if err := os.WriteFile(defaultLevelFile, []byte(defaultLevelData), 0644); err != nil {
+		t.Fatalf("Failed to write default-level file: %v", err)
+	}
+
+	user, err = source.LoadUser("default")
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+	if user.Level != MORTAL_FIRST {
+		t.Errorf("Expected default level %d, got %d", MORTAL_FIRST, user.Level)
 	}
 }

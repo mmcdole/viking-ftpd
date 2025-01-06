@@ -1,96 +1,104 @@
 package authentication
 
 import (
+	"errors"
 	"testing"
-	"time"
 
-	"github.com/mmcdole/viking-ftpd/pkg/playerdata"
+	"github.com/mmcdole/viking-ftpd/pkg/users"
+	"github.com/stretchr/testify/assert"
 )
 
-func TestAuthenticator(t *testing.T) {
-	// Create test data
-	testCharacter := &playerdata.Character{
-		Username:     "testuser",
-		PasswordHash: "$1$abc$xyz123", // Unix crypt format
-		Level:        playerdata.WIZARD,
+// mockSource implements users.Source for testing
+type mockSource struct {
+	users map[string]*users.User
+}
+
+func newMockSource() *mockSource {
+	return &mockSource{
+		users: make(map[string]*users.User),
+	}
+}
+
+func (s *mockSource) LoadUser(username string) (*users.User, error) {
+	user, ok := s.users[username]
+	if !ok {
+		return nil, users.ErrUserNotFound
+	}
+	return user, nil
+}
+
+func (s *mockSource) addUser(username, passwordHash string, level int) {
+	s.users[username] = &users.User{
+		Username:     username,
+		PasswordHash: passwordHash,
+		Level:       level,
+	}
+}
+
+// mockVerifier implements PasswordVerifier for testing
+type mockVerifier struct {
+	expectedHash     string
+	expectedPassword string
+}
+
+func (m *mockVerifier) VerifyPassword(hashedPassword, password string) error {
+	if hashedPassword == m.expectedHash && password == m.expectedPassword {
+		return nil
+	}
+	return errors.New("password mismatch")
+}
+
+func TestAuthenticator_Authenticate(t *testing.T) {
+	source := newMockSource()
+	verifier := &mockVerifier{
+		expectedHash:     "hashedpass123",
+		expectedPassword: "testpass123",
 	}
 
-	// Create memory source with test data
-	characterSource := playerdata.NewMemorySource()
-	characterSource.AddCharacter(testCharacter)
+	// Add test user with expected hash
+	source.addUser("user1", "hashedpass123", 1)
 
-	// Create repository
-	characterRepository := playerdata.NewRepository(characterSource, 100*time.Millisecond)
+	auth := NewAuthenticator(source, verifier)
 
-	// Create authenticator
-	authenticator, err := NewAuthenticator(characterRepository, nil)
-	if err != nil {
-		t.Fatalf("creating authenticator: %v", err)
+	tests := []struct {
+		name          string
+		username      string
+		password      string
+		wantErr       error
+		wantLevel     int
+	}{
+		{
+			name:      "valid credentials",
+			username:  "user1",
+			password:  "testpass123",
+			wantErr:   nil,
+			wantLevel: 1,
+		},
+		{
+			name:      "invalid password",
+			username:  "user1",
+			password:  "wrongpass",
+			wantErr:   ErrInvalidCredentials,
+		},
+		{
+			name:      "user not found",
+			username:  "nonexistent",
+			password:  "testpass123",
+			wantErr:   ErrInvalidCredentials,
+		},
 	}
 
-	t.Run("authenticate valid user", func(t *testing.T) {
-		err := authenticator.Authenticate("testuser", "correctpass")
-		if err != nil {
-			t.Errorf("unexpected error: %v", err)
-		}
-	})
-
-	t.Run("authenticate invalid password", func(t *testing.T) {
-		err := authenticator.Authenticate("testuser", "wrongpass")
-		if err == nil {
-			t.Error("expected error for wrong password")
-		}
-	})
-
-	t.Run("authenticate non-existent user", func(t *testing.T) {
-		err := authenticator.Authenticate("nonexistent", "anypass")
-		if err != ErrUserNotFound {
-			t.Errorf("expected ErrUserNotFound, got %v", err)
-		}
-	})
-
-	t.Run("user exists", func(t *testing.T) {
-		exists, err := authenticator.UserExists("testuser")
-		if err != nil {
-			t.Errorf("unexpected error: %v", err)
-		}
-		if !exists {
-			t.Error("UserExists returned false for existing user")
-		}
-	})
-
-	t.Run("user does not exist", func(t *testing.T) {
-		exists, err := authenticator.UserExists("nonexistent")
-		if err != nil {
-			t.Errorf("unexpected error: %v", err)
-		}
-		if exists {
-			t.Error("UserExists returned true for non-existent user")
-		}
-	})
-
-	t.Run("refresh user", func(t *testing.T) {
-		if err := authenticator.RefreshUser("testuser"); err != nil {
-			t.Errorf("unexpected error: %v", err)
-		}
-	})
-
-	t.Run("configuration", func(t *testing.T) {
-		t.Run("requires repository", func(t *testing.T) {
-			_, err := NewAuthenticator(nil, nil)
-			if err == nil {
-				t.Error("expected error when repository not provided")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			user, err := auth.Authenticate(tt.username, tt.password)
+			if tt.wantErr != nil {
+				assert.ErrorIs(t, err, tt.wantErr)
+				assert.Nil(t, user)
+			} else {
+				assert.NoError(t, err)
+				assert.NotNil(t, user)
+				assert.Equal(t, tt.wantLevel, user.Level)
 			}
 		})
-
-		t.Run("uses default hash comparer", func(t *testing.T) {
-			auth, err := NewAuthenticator(characterRepository, nil)
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-			if auth.comparer == nil {
-				t.Error("expected default hash comparer to be set")
-			}
-		})
-	})
+	}
 }

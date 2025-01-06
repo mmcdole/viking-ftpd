@@ -32,10 +32,17 @@ func (p Permission) CanGrant() bool {
 	return p >= GrantGrant
 }
 
-// CharacterDataSource represents a source of character level data
-type CharacterDataSource interface {
-	// GetCharacterLevel returns the level for a given character
-	GetCharacterLevel(username string) (int, error)
+// AccessTree represents a node in the access permission tree
+type AccessTree struct {
+	Root   *AccessNode
+	Groups []string
+}
+
+// AccessNode represents a node in the access tree
+type AccessNode struct {
+	DotAccess  Permission
+	StarAccess Permission
+	Children   map[string]*AccessNode
 }
 
 // Group constants
@@ -50,9 +57,6 @@ const (
 
 // AuthorizerConfig holds the configuration for creating a new Authorizer
 type AuthorizerConfig struct {
-	// CharacterData provides the character level data
-	CharacterData CharacterDataSource
-
 	// DefaultPermission is used when no matching rule is found
 	DefaultPermission Permission
 }
