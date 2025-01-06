@@ -28,7 +28,6 @@ func (s *AccessFileSource) LoadRawData() (map[string]interface{}, error) {
 
 	// Parse the LPC object format
 	parser := lpc.NewObjectParser(false)
-	parser.SetFile(s.filePath)
 	result, err := parser.ParseObject(string(data))
 	if err != nil {
 		return nil, fmt.Errorf("parsing access file: %w", err)
