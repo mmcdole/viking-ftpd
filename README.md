@@ -36,23 +36,25 @@ Create a configuration file in JSON format. Example:
     "home_pattern": "players/%s",
     "tls_cert_file": "/path/to/cert.pem",
     "tls_key_file": "/path/to/key.pem",
-    "passive_port_range": [2122, 2150],
+    "pasv_port_range": [2122, 2150],
     "pasv_address": "your.public.ip.address",
     "pasv_ip_verify": true,
     "max_connections": 10,
     "idle_timeout": 300,
     "character_cache_time": 60,
     "access_cache_time": 60,
-    "access_log_path": "/mud/lib/log/vkftpd-access.log"
+    "access_log_path": "/mud/lib/log/vkftpd-access.log",
+    "app_log_path": "/mud/lib/log/vkftpd-app.log",
+    "log_level": "info"
 }
 ```
 
 ### Network Settings
 - `listen_addr`: Address to listen on (e.g., "0.0.0.0" for all interfaces)
 - `port`: Port to listen on (default: 2121)
-- `passive_port_range`: Range of ports for passive mode (default: [50000, 50100])
+- `pasv_port_range`: Range of ports for passive mode (default: [50000, 50100])
 - `pasv_address`: Public IP address to advertise for passive mode connections (optional)
-- `pasv_ip_verify`: Whether to verify that data connection IPs match control connection IP (optional, default: false)
+- `pasv_ip_verify`: Whether to verify data connection IP matches control IP (optional, default: false)
 - `max_connections`: Maximum concurrent connections (default: 10)
 - `idle_timeout`: Connection idle timeout in seconds (default: 300)
 
@@ -72,6 +74,8 @@ If TLS certificate and key files are provided, the server will support both FTP 
 - `character_cache_time`: How long to cache character data in seconds (default: 60)
 - `access_cache_time`: How long to cache access.o data in seconds (default: 60)
 - `access_log_path`: Path to access log file (optional)
+- `app_log_path`: Path to application log file (optional)
+- `log_level`: Log level (debug, info, warn, error, panic) (default: info)
 
 ## Package Overview
 
