@@ -37,6 +37,8 @@ Create a configuration file in JSON format. Example:
     "tls_cert_file": "/path/to/cert.pem",
     "tls_key_file": "/path/to/key.pem",
     "passive_port_range": [2122, 2150],
+    "pasv_address": "your.public.ip.address",
+    "pasv_ip_verify": true,
     "max_connections": 10,
     "idle_timeout": 300,
     "character_cache_time": 60,
@@ -49,6 +51,8 @@ Create a configuration file in JSON format. Example:
 - `listen_addr`: Address to listen on (e.g., "0.0.0.0" for all interfaces)
 - `port`: Port to listen on (default: 2121)
 - `passive_port_range`: Range of ports for passive mode (default: [50000, 50100])
+- `pasv_address`: Public IP address to advertise for passive mode connections (optional)
+- `pasv_ip_verify`: Whether to verify that data connection IPs match control connection IP (optional, default: false)
 - `max_connections`: Maximum concurrent connections (default: 10)
 - `idle_timeout`: Connection idle timeout in seconds (default: 300)
 

@@ -25,6 +25,8 @@ type Config struct {
 	TLSCertFile          string // Path to TLS certificate file
 	TLSKeyFile           string // Path to TLS private key file
 	Debug                bool   // Enable debug logging in ftpserver
+	PasvAddress          string // Public IP for passive mode connections
+	PasvIPVerify         bool   // Whether to verify data connection IPs
 }
 
 // Server wraps the FTP server with our custom auth
@@ -76,14 +78,27 @@ var errNoTLS = errors.New("TLS is not configured")
 
 // GetSettings returns server settings
 func (d *ftpDriver) GetSettings() (*ftpserverlib.Settings, error) {
-	return &ftpserverlib.Settings{
+	settings := &ftpserverlib.Settings{
 		ListenAddr: fmt.Sprintf("%s:%d", d.server.config.ListenAddr, d.server.config.Port),
 		PassiveTransferPortRange: &ftpserverlib.PortRange{
 			Start: d.server.config.PassiveTransferPorts[0],
 			End:   d.server.config.PassiveTransferPorts[1],
 		},
 		TLSRequired: ftpserverlib.ClearOrEncrypted,
-	}, nil
+	}
+
+	// Set public IP for passive mode if configured
+	if d.server.config.PasvAddress != "" {
+		settings.PublicHost = d.server.config.PasvAddress
+	}
+	// Set security check for passive connections
+	if d.server.config.PasvIPVerify {
+		settings.PasvConnectionsCheck = ftpserverlib.IPMatchRequired
+	} else {
+		settings.PasvConnectionsCheck = ftpserverlib.IPMatchDisabled
+	}
+
+	return settings, nil
 }
 
 // ClientConnected is called when a client connects

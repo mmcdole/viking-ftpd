@@ -12,6 +12,8 @@ type Config struct {
 	// Core server settings
 	ListenAddr         string `json:"listen_addr"`
 	Port               int    `json:"port"`
+	PasvAddress        string `json:"pasv_address,omitempty"`    // Public IP for passive mode connections
+	PasvIPVerify       bool   `json:"pasv_ip_verify,omitempty"` // Whether to verify data connection IPs
 
 	// Directory settings
 	FTPRootDir         string `json:"ftp_root_dir"`      // Root directory for FTP access
