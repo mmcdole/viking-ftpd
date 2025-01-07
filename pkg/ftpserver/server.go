@@ -73,6 +73,7 @@ type ftpDriver struct {
 var errNoTLS = errors.New("TLS is not configured")
 
 // GetSettings returns server settings
+// Interface: ftpserverlib.MainDriver
 func (d *ftpDriver) GetSettings() (*ftpserverlib.Settings, error) {
 	settings := &ftpserverlib.Settings{
 		ListenAddr: fmt.Sprintf("%s:%d", d.server.config.ListenAddr, d.server.config.Port),
@@ -97,6 +98,7 @@ func (d *ftpDriver) GetSettings() (*ftpserverlib.Settings, error) {
 }
 
 // ClientConnected is called when a client connects
+// Interface: ftpserverlib.MainDriver
 func (d *ftpDriver) ClientConnected(cc ftpserverlib.ClientContext) (string, error) {
 	// Enable debug logging if log level is debug
 	if logging.App.IsDebug() {
@@ -107,11 +109,13 @@ func (d *ftpDriver) ClientConnected(cc ftpserverlib.ClientContext) (string, erro
 }
 
 // ClientDisconnected is called when a client disconnects
+// Interface: ftpserverlib.MainDriver
 func (d *ftpDriver) ClientDisconnected(cc ftpserverlib.ClientContext) {
 	logging.Access.LogAccess("disconnect", "", cc.RemoteAddr().String(), "success")
 }
 
 // AuthUser authenticates the user and returns a ClientDriver
+// Interface: ftpserverlib.MainDriver
 func (d *ftpDriver) AuthUser(cc ftpserverlib.ClientContext, user, pass string) (ftpserverlib.ClientDriver, error) {
 	// Authenticate user
 	_, err := d.server.authenticator.Authenticate(user, pass)
@@ -149,6 +153,7 @@ func (d *ftpDriver) AuthUser(cc ftpserverlib.ClientContext, user, pass string) (
 }
 
 // GetTLSConfig returns TLS config
+// Interface: ftpserverlib.MainDriver
 func (d *ftpDriver) GetTLSConfig() (*tls.Config, error) {
 	if d.server.config.TLSCertFile == "" || d.server.config.TLSKeyFile == "" {
 		// If no TLS config is provided, return error to indicate no TLS support
@@ -166,7 +171,7 @@ func (d *ftpDriver) GetTLSConfig() (*tls.Config, error) {
 	}, nil
 }
 
-// ftpClient implements both ftpserverlib.ClientDriver
+// ftpClient implements ftpserverlib.ClientDriver and afero.Fs
 type ftpClient struct {
 	server   *Server
 	user     string
@@ -188,12 +193,14 @@ func (c *ftpClient) resolvePath(name string) (string, error) {
 	return filepath.Clean(filepath.Join(currentPath, name)), nil
 }
 
-// GetFS returns the filesystem - part of ftpserverlib.ClientDriver interface
+// GetFS returns the filesystem
+// Interface: ftpserverlib.ClientDriver
 func (c *ftpClient) GetFS() afero.Fs {
 	return c
 }
 
-// ChangeCwd implements ftpserverlib.ClientDriverExtensionChdir
+// ChangeCwd implements directory change
+// Interface: ftpserverlib.ClientDriver
 func (c *ftpClient) ChangeCwd(path string) error {
 	if !c.server.authorizer.CanRead(c.user, path) {
 		logging.Access.LogAccess("chdir", c.user, path, "denied")
@@ -203,12 +210,8 @@ func (c *ftpClient) ChangeCwd(path string) error {
 	return nil
 }
 
-// =====================================
-// FTP Server-Specific Methods
-// These are specific to ftpserverlib.ClientDriver and its extensions
-// =====================================
-
-// ReadDir is required by ftpserverlib for directory listing
+// ReadDir is required for directory listing
+// Interface: ftpserverlib.ClientDriver
 func (c *ftpClient) ReadDir(name string) ([]os.FileInfo, error) {
 	path, err := c.resolvePath(name)
 	if err != nil {
@@ -242,7 +245,8 @@ func (c *ftpClient) ReadDir(name string) ([]os.FileInfo, error) {
 	return entries, nil
 }
 
-// DeleteFile is required by ftpserverlib for DELE command
+// DeleteFile implements file deletion
+// Interface: ftpserverlib.ClientDriver
 func (c *ftpClient) DeleteFile(name string) error {
 	path, err := c.resolvePath(name)
 	if err != nil {
@@ -263,7 +267,8 @@ func (c *ftpClient) DeleteFile(name string) error {
 	return nil
 }
 
-// MakeDirectory is required by ftpserverlib for MKD command
+// MakeDirectory implements directory creation
+// Interface: ftpserverlib.ClientDriver
 func (c *ftpClient) MakeDirectory(name string) error {
 	if !c.server.authorizer.CanWrite(c.user, name) {
 		logging.Access.LogAccess("mkdir", c.user, name, "denied", "error", os.ErrPermission)
@@ -279,12 +284,8 @@ func (c *ftpClient) MakeDirectory(name string) error {
 	return nil
 }
 
-// =====================================
-// afero.Fs Interface Methods
-// These implement the standard filesystem interface
-// =====================================
-
-// Open opens a file for reading - part of afero.Fs interface
+// Open opens a file for reading
+// Interface: afero.Fs
 func (c *ftpClient) Open(name string) (afero.File, error) {
 	path, err := c.resolvePath(name)
 	if err != nil {
@@ -311,7 +312,8 @@ func (c *ftpClient) Open(name string) (afero.File, error) {
 	return file, nil
 }
 
-// OpenFile opens a file using the given flags and mode - part of afero.Fs interface
+// OpenFile opens a file using the given flags and mode
+// Interface: afero.Fs
 func (c *ftpClient) OpenFile(name string, flag int, perm os.FileMode) (afero.File, error) {
 	path, err := c.resolvePath(name)
 	if err != nil {
@@ -351,7 +353,8 @@ func (c *ftpClient) OpenFile(name string, flag int, perm os.FileMode) (afero.Fil
 	return file, nil
 }
 
-// Create creates a new file - part of afero.Fs interface
+// Create creates a new file
+// Interface: afero.Fs
 func (c *ftpClient) Create(name string) (afero.File, error) {
 	path, err := c.resolvePath(name)
 	if err != nil {
@@ -373,7 +376,8 @@ func (c *ftpClient) Create(name string) (afero.File, error) {
 	return file, nil
 }
 
-// Mkdir creates a directory - part of afero.Fs interface
+// Mkdir creates a directory
+// Interface: afero.Fs
 func (c *ftpClient) Mkdir(name string, perm os.FileMode) error {
 	path, err := c.resolvePath(name)
 	if err != nil {
@@ -389,7 +393,8 @@ func (c *ftpClient) Mkdir(name string, perm os.FileMode) error {
 	return err
 }
 
-// MkdirAll creates a directory and all parent directories - part of afero.Fs interface
+// MkdirAll creates a directory and all parent directories
+// Interface: afero.Fs
 func (c *ftpClient) MkdirAll(path string, perm os.FileMode) error {
 	resolvedPath, err := c.resolvePath(path)
 	if err != nil {
@@ -405,7 +410,8 @@ func (c *ftpClient) MkdirAll(path string, perm os.FileMode) error {
 	return err
 }
 
-// Remove removes a file - part of afero.Fs interface
+// Remove removes a file
+// Interface: afero.Fs
 func (c *ftpClient) Remove(name string) error {
 	path, err := c.resolvePath(name)
 	if err != nil {
@@ -426,7 +432,8 @@ func (c *ftpClient) Remove(name string) error {
 	return nil
 }
 
-// RemoveAll removes a directory and all its contents - part of afero.Fs interface
+// RemoveAll removes a directory and all its contents
+// Interface: afero.Fs
 func (c *ftpClient) RemoveAll(path string) error {
 	resolvedPath, err := c.resolvePath(path)
 	if err != nil {
@@ -447,7 +454,8 @@ func (c *ftpClient) RemoveAll(path string) error {
 	return nil
 }
 
-// Rename renames a file - part of afero.Fs interface
+// Rename renames a file
+// Interface: afero.Fs
 func (c *ftpClient) Rename(oldname, newname string) error {
 	oldPath, err := c.resolvePath(oldname)
 	if err != nil {
@@ -473,7 +481,8 @@ func (c *ftpClient) Rename(oldname, newname string) error {
 	return nil
 }
 
-// Stat returns file info - part of afero.Fs interface
+// Stat returns file info
+// Interface: afero.Fs
 func (c *ftpClient) Stat(name string) (os.FileInfo, error) {
 	path, err := c.resolvePath(name)
 	if err != nil {
@@ -486,12 +495,14 @@ func (c *ftpClient) Stat(name string) (os.FileInfo, error) {
 	return c.fs.Stat(path)
 }
 
-// Name returns the name of the filesystem - part of afero.Fs interface
+// Name returns the name of the filesystem
+// Interface: afero.Fs
 func (c *ftpClient) Name() string {
 	return "VikingFTPD"
 }
 
-// Chmod changes file mode - part of afero.Fs interface
+// Chmod changes file mode
+// Interface: afero.Fs
 func (c *ftpClient) Chmod(name string, mode os.FileMode) error {
 	path, err := c.resolvePath(name)
 	if err != nil {
@@ -504,7 +515,8 @@ func (c *ftpClient) Chmod(name string, mode os.FileMode) error {
 	return c.fs.Chmod(path, mode)
 }
 
-// Chown changes file owner - part of afero.Fs interface
+// Chown changes file owner
+// Interface: afero.Fs
 func (c *ftpClient) Chown(name string, uid, gid int) error {
 	path, err := c.resolvePath(name)
 	if err != nil {
@@ -517,48 +529,11 @@ func (c *ftpClient) Chown(name string, uid, gid int) error {
 	return c.fs.Chown(path, uid, gid)
 }
 
-// Chtimes changes file times - part of afero.Fs interface
+// Chtimes changes file times
+// Interface: afero.Fs
 func (c *ftpClient) Chtimes(name string, atime time.Time, mtime time.Time) error {
 	if !c.server.authorizer.CanWrite(c.user, name) {
 		return os.ErrPermission
 	}
 	return c.fs.Chtimes(name, atime, mtime)
-}
-
-// Size returns the size of a file - part of ftpFs interface
-func (c *ftpClient) Size(name string) (int64, error) {
-	path, err := c.resolvePath(name)
-	if err != nil {
-		return 0, err
-	}
-
-	if !c.server.authorizer.CanRead(c.user, path) {
-		return 0, os.ErrPermission
-	}
-
-	info, err := c.fs.Stat(path)
-	if err != nil {
-		return 0, err
-	}
-
-	return info.Size(), nil
-}
-
-// ModTime returns the modification time of a file - part of ftpFs interface
-func (c *ftpClient) ModTime(name string) (time.Time, error) {
-	path, err := c.resolvePath(name)
-	if err != nil {
-		return time.Time{}, err
-	}
-
-	if !c.server.authorizer.CanRead(c.user, path) {
-		return time.Time{}, os.ErrPermission
-	}
-
-	info, err := c.fs.Stat(path)
-	if err != nil {
-		return time.Time{}, err
-	}
-
-	return info.ModTime(), nil
 }
