@@ -147,7 +147,7 @@ func (d *ftpDriver) AuthUser(cc ftpserverlib.ClientContext, user, pass string) (
 		user:     user,
 		homePath: homePath,
 		rootPath: d.server.config.RootDir,
-		fs:       afero.NewOsFs(),
+		fs:       fs,
 		cc:       cc,
 	}, nil
 }
