@@ -14,14 +14,14 @@ func TestFileSource_LoadUser(t *testing.T) {
 	}
 	defer os.RemoveAll(tempDir)
 
-	// Create characters directory structure
-	charactersDir := filepath.Join(tempDir, "characters", "t")
-	if err := os.MkdirAll(charactersDir, 0755); err != nil {
-		t.Fatalf("Failed to create characters dir: %v", err)
+	// Create directory structure
+	userDir := filepath.Join(tempDir, "t")
+	if err := os.MkdirAll(userDir, 0755); err != nil {
+		t.Fatalf("Failed to create user dir: %v", err)
 	}
 
 	// Create test user file
-	userFile := filepath.Join(charactersDir, "test.o")
+	userFile := filepath.Join(userDir, "test.o")
 	testData := `password "hashedpass"
 level 50
 cap_name "Test"
@@ -60,7 +60,7 @@ gender 1`
 	}
 
 	// Test invalid file format
-	invalidFile := filepath.Join(charactersDir, "invalid.o")
+	invalidFile := filepath.Join(userDir, "invalid.o")
 	invalidData := `invalid format`
 	if err := os.WriteFile(invalidFile, []byte(invalidData), 0644); err != nil {
 		t.Fatalf("Failed to write invalid file: %v", err)
@@ -72,7 +72,7 @@ gender 1`
 	}
 
 	// Test missing password
-	noPassDir := filepath.Join(tempDir, "characters", "n")
+	noPassDir := filepath.Join(tempDir, "n")
 	if err := os.MkdirAll(noPassDir, 0755); err != nil {
 		t.Fatalf("Failed to create nopass dir: %v", err)
 	}
@@ -90,7 +90,7 @@ gender 1`
 	}
 
 	// Test default level
-	defaultDir := filepath.Join(tempDir, "characters", "d")
+	defaultDir := filepath.Join(tempDir, "d")
 	if err := os.MkdirAll(defaultDir, 0755); err != nil {
 		t.Fatalf("Failed to create default dir: %v", err)
 	}

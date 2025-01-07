@@ -36,7 +36,8 @@ func (s *FileSource) getCharacterPath(username string) string {
 	}
 	// Get first letter of username for subdirectory
 	firstLetter := strings.ToLower(username[0:1])
-	return filepath.Join(s.rootDir, "characters", firstLetter, username+".o")
+	path := filepath.Join(s.rootDir, firstLetter, username+".o")
+	return path
 }
 
 // LoadUser implements Source
@@ -86,6 +87,6 @@ func (s *FileSource) LoadUser(username string) (*User, error) {
 	return &User{
 		Username:     username,
 		PasswordHash: passwordHash,
-		Level:       level,
+		Level:        level,
 	}, nil
 }
