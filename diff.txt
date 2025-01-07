@@ -1,0 +1,560 @@
+diff --git a/pkg/ftpserver/server.go b/pkg/ftpserver/server.go
+index 76e5c0d..43920f5 100644
+--- a/pkg/ftpserver/server.go
++++ b/pkg/ftpserver/server.go
+@@ -17,16 +17,15 @@ import (
+ 
+ // Config holds FTP server configuration
+ type Config struct {
+-	ListenAddr           string
+-	Port                 int
+-	RootDir              string // Root directory that FTP users will be restricted to
+-	HomePattern          string // Pattern for user home directories (e.g., "/home/%s" where %s is username)
+-	PassiveTransferPorts [2]int
+-	TLSCertFile          string // Path to TLS certificate file
+-	TLSKeyFile           string // Path to TLS private key file
+-	Debug                bool   // Enable debug logging in ftpserver
+-	PasvAddress          string // Public IP for passive mode connections
+-	PasvIPVerify         bool   // Whether to verify data connection IPs
++	ListenAddr    string // Address to listen on
++	Port          int    // Port to listen on
++	RootDir       string // Root directory that FTP users will be restricted to
++	HomePattern   string // Pattern for user home directories (e.g., "/home/%s")
++	TLSCertFile   string // Path to TLS certificate file
++	TLSKeyFile    string // Path to TLS private key file
++	PasvPortRange [2]int // Range of ports for passive mode transfers
++	PasvAddress   string // Public IP for passive mode connections
++	PasvIPVerify  bool   // Whether to verify data connection IPs
+ }
+ 
+ // Server wraps the FTP server with our custom auth
+@@ -53,8 +52,8 @@ func New(config *Config, authorizer *authorization.Authorizer, authenticator *au
+ 	driver := &ftpDriver{server: s}
+ 	s.server = ftpserverlib.NewFtpServer(driver)
+ 
+-	// Set FTP server logger (stdout only)
+-	s.server.Logger = NewFTPLogger()
++	// Use the global App logger for ftpserverlib
++	s.server.Logger = logging.App
+ 
+ 	return s, nil
+ }
+@@ -81,8 +80,8 @@ func (d *ftpDriver) GetSettings() (*ftpserverlib.Settings, error) {
+ 	settings := &ftpserverlib.Settings{
+ 		ListenAddr: fmt.Sprintf("%s:%d", d.server.config.ListenAddr, d.server.config.Port),
+ 		PassiveTransferPortRange: &ftpserverlib.PortRange{
+-			Start: d.server.config.PassiveTransferPorts[0],
+-			End:   d.server.config.PassiveTransferPorts[1],
++			Start: d.server.config.PasvPortRange[0],
++			End:   d.server.config.PasvPortRange[1],
+ 		},
+ 		TLSRequired: ftpserverlib.ClearOrEncrypted,
+ 	}
+@@ -103,16 +102,17 @@ func (d *ftpDriver) GetSettings() (*ftpserverlib.Settings, error) {
+ 
+ // ClientConnected is called when a client connects
+ func (d *ftpDriver) ClientConnected(cc ftpserverlib.ClientContext) (string, error) {
+-	if d.server.config.Debug {
++	// Enable debug logging if log level is debug
++	if logging.App.IsDebug() {
+ 		cc.SetDebug(true)
+ 	}
+-	logging.LogConnect(cc.RemoteAddr().String(), nil)
++	logging.Access.LogAccess("connect", "", cc.RemoteAddr().String(), "success")
+ 	return "Welcome to Viking FTP server", nil
+ }
+ 
+ // ClientDisconnected is called when a client disconnects
+ func (d *ftpDriver) ClientDisconnected(cc ftpserverlib.ClientContext) {
+-	logging.LogDisconnect(cc.RemoteAddr().String())
++	logging.Access.LogAccess("disconnect", "", cc.RemoteAddr().String(), "success")
+ }
+ 
+ // AuthUser authenticates the user and returns a ClientDriver
+@@ -120,7 +120,7 @@ func (d *ftpDriver) AuthUser(cc ftpserverlib.ClientContext, user, pass string) (
+ 	// Authenticate user
+ 	_, err := d.server.authenticator.Authenticate(user, pass)
+ 	if err != nil {
+-		logging.LogAuth(user, cc.RemoteAddr().String(), err)
++		logging.Access.LogAuth("login", user, "failed", "error", err)
+ 		return nil, fmt.Errorf("authentication failed: %w", err)
+ 	}
+ 
+@@ -139,13 +139,13 @@ func (d *ftpDriver) AuthUser(cc ftpserverlib.ClientContext, user, pass string) (
+ 	// Set initial path (home or root)
+ 	cc.SetPath(filepath.Join("/", homePath))
+ 
+-	logging.LogAuth(user, cc.RemoteAddr().String(), nil)
++	logging.Access.LogAuth("login", user, "success")
+ 	return &ftpClient{
+ 		server:   d.server,
+ 		user:     user,
+-		fs:       fs,
+ 		homePath: homePath,
+ 		rootPath: d.server.config.RootDir,
++		fs:       fs,
+ 		cc:       cc,
+ 	}, nil
+ }
+@@ -205,85 +205,99 @@ func (c *ftpClient) GetFS() afero.Fs {
+ // ChangeCwd implements ftpserverlib.ClientDriverExtensionChdir
+ func (c *ftpClient) ChangeCwd(path string) error {
+ 	if !c.server.authorizer.CanRead(c.user, path) {
+-		logging.LogChdir(c.user, path, os.ErrPermission)
++		logging.Access.LogAccess("chdir", c.user, path, "denied")
+ 		return os.ErrPermission
+ 	}
+-	logging.LogChdir(c.user, path, nil)
++	logging.Access.LogAccess("chdir", c.user, path, "success")
+ 	return nil
+ }
+ 
+-// =====================================
+-// FTP Server-Specific Methods
+-// These are specific to ftpserverlib.ClientDriver and its extensions
+-// =====================================
+-
+ // ReadDir is required by ftpserverlib for directory listing
+-func (c *ftpClient) ReadDir(name string) ([]os.FileInfo, error) {
+-	path, err := c.resolvePath(name)
++func (c *ftpClient) ReadDir(path string) ([]os.FileInfo, error) {
++	resolvedPath, err := c.resolvePath(path)
+ 	if err != nil {
++		logging.Access.LogAccess("readdir", c.user, path, "error", "error", err)
+ 		return nil, err
+ 	}
+ 
+ 	if !c.server.authorizer.CanRead(c.user, path) {
+-		logging.LogReadDir(c.user, path, 0, os.ErrPermission)
++		logging.Access.LogAccess("readdir", c.user, path, "denied")
+ 		return nil, os.ErrPermission
+ 	}
+ 
+-	f, err := c.fs.Open(path)
++	// Open the directory
++	f, err := c.fs.Open(resolvedPath)
+ 	if err != nil {
++		logging.Access.LogAccess("readdir", c.user, path, "error", "error", err)
+ 		return nil, err
+ 	}
+ 	defer f.Close()
+ 
+-	readDirIface, ok := f.(interface {
+-		Readdir(count int) ([]os.FileInfo, error)
+-	})
+-	if !ok {
+-		return nil, fmt.Errorf("file does not support directory listing")
++	// Get file info to check if it's a directory
++	fi, err := f.Stat()
++	if err != nil {
++		logging.Access.LogAccess("readdir", c.user, path, "error", "error", err)
++		return nil, err
++	}
++
++	if !fi.IsDir() {
++		logging.Access.LogAccess("readdir", c.user, path, "error", "error", "not a directory")
++		return nil, fmt.Errorf("not a directory")
+ 	}
+ 
+-	entries, err := readDirIface.Readdir(-1)
++	// Read directory entries
++	entries, err := f.Readdir(-1)
+ 	if err != nil {
++		logging.Access.LogAccess("readdir", c.user, path, "error", "error", err)
+ 		return nil, err
+ 	}
+ 
+-	logging.LogReadDir(c.user, path, len(entries), err)
++	logging.Access.LogAccess("readdir", c.user, path, "success", "count", len(entries))
+ 	return entries, nil
+ }
+ 
+ // DeleteFile is required by ftpserverlib for DELE command
+-func (c *ftpClient) DeleteFile(name string) error {
+-	path, err := c.resolvePath(name)
++func (c *ftpClient) DeleteFile(path string) error {
++	resolvedPath, err := c.resolvePath(path)
+ 	if err != nil {
++		logging.Access.LogAccess("delete", c.user, path, "error", "error", err)
+ 		return err
+ 	}
+ 
+ 	if !c.server.authorizer.CanWrite(c.user, path) {
+-		logging.LogDelete(c.user, path, os.ErrPermission)
++		logging.Access.LogAccess("delete", c.user, path, "denied")
+ 		return os.ErrPermission
+ 	}
+ 
+-	if err := c.fs.Remove(path); err != nil {
+-		logging.LogDelete(c.user, path, err)
++	err = c.fs.Remove(resolvedPath)
++	if err != nil {
++		logging.Access.LogAccess("delete", c.user, path, "error", "error", err)
+ 		return err
+ 	}
+ 
+-	logging.LogDelete(c.user, path, nil)
++	logging.Access.LogAccess("delete", c.user, path, "success")
+ 	return nil
+ }
+ 
+ // MakeDirectory is required by ftpserverlib for MKD command
+ func (c *ftpClient) MakeDirectory(name string) error {
++	resolvedPath, err := c.resolvePath(name)
++	if err != nil {
++		logging.Access.LogAccess("mkdir", c.user, name, "error", "error", err)
++		return err
++	}
++
+ 	if !c.server.authorizer.CanWrite(c.user, name) {
+-		logging.LogMkdir(c.user, name, os.ErrPermission)
++		logging.Access.LogAccess("mkdir", c.user, name, "denied")
+ 		return os.ErrPermission
+ 	}
+-
+-	if err := c.fs.Mkdir(name, 0755); err != nil {
++	err = c.fs.Mkdir(resolvedPath, 0755)
++	if err != nil {
++		logging.Access.LogAccess("mkdir", c.user, name, "error", "error", err)
+ 		return err
+ 	}
+ 
+-	logging.LogMkdir(c.user, name, nil)
++	logging.Access.LogAccess("mkdir", c.user, name, "success")
+ 	return nil
+ }
+ 
+@@ -296,66 +310,71 @@ func (c *ftpClient) MakeDirectory(name string) error {
+ func (c *ftpClient) Open(name string) (afero.File, error) {
+ 	path, err := c.resolvePath(name)
+ 	if err != nil {
++		logging.Access.LogAccess("open", c.user, name, "error", "error", err)
+ 		return nil, err
+ 	}
+ 
+ 	if !c.server.authorizer.CanRead(c.user, path) {
+-		logging.LogOpen(c.user, path, logging.ModeRead, 0, os.ErrPermission)
++		logging.Access.LogAccess("open", c.user, name, "denied", "mode", "read")
+ 		return nil, os.ErrPermission
+ 	}
+ 
+ 	file, err := c.fs.Open(path)
+ 	if err != nil {
+-		logging.LogOpen(c.user, path, logging.ModeRead, 0, err)
++		logging.Access.LogAccess("open", c.user, name, "error", "mode", "read", "error", err)
+ 		return nil, err
+ 	}
+ 
+-	// Get file size for logging
++	// Log success with file size
+ 	if fi, err := file.Stat(); err == nil {
+-		logging.LogOpen(c.user, path, logging.ModeRead, fi.Size(), nil)
++		logging.Access.LogAccess("open", c.user, name, "success", "mode", "read", "size", fi.Size())
+ 	} else {
+-		logging.LogOpen(c.user, path, logging.ModeRead, 0, nil)
++		logging.Access.LogAccess("open", c.user, name, "success", "mode", "read")
+ 	}
++
+ 	return file, nil
+ }
+ 
+-// OpenFile opens a file using the given flags and mode - part of afero.Fs interface
++// OpenFile opens a file with specified flag and permission - part of afero.Fs interface
+ func (c *ftpClient) OpenFile(name string, flag int, perm os.FileMode) (afero.File, error) {
+ 	path, err := c.resolvePath(name)
+ 	if err != nil {
++		logging.Access.LogAccess("open", c.user, name, "error", "error", err)
+ 		return nil, err
+ 	}
+ 
+ 	// Check write permission if file is being created or modified
+ 	if flag&(os.O_WRONLY|os.O_RDWR|os.O_APPEND|os.O_CREATE|os.O_TRUNC) != 0 {
+ 		if !c.server.authorizer.CanWrite(c.user, path) {
+-			logging.LogOpen(c.user, path, logging.ModeWrite, 0, os.ErrPermission)
++			logging.Access.LogAccess("open", c.user, name, "denied", "mode", "write")
+ 			return nil, os.ErrPermission
+ 		}
+-		logging.LogOpen(c.user, path, logging.ModeWrite, 0, nil)
+ 	} else if !c.server.authorizer.CanRead(c.user, path) {
+-		logging.LogOpen(c.user, path, logging.ModeRead, 0, os.ErrPermission)
++		logging.Access.LogAccess("open", c.user, name, "denied", "mode", "read")
+ 		return nil, os.ErrPermission
+ 	}
+ 
+ 	file, err := c.fs.OpenFile(path, flag, perm)
+ 	if err != nil {
++		mode := "read"
+ 		if flag&(os.O_WRONLY|os.O_RDWR|os.O_APPEND|os.O_CREATE|os.O_TRUNC) != 0 {
+-			logging.LogOpen(c.user, path, logging.ModeWrite, 0, err)
+-		} else {
+-			logging.LogOpen(c.user, path, logging.ModeRead, 0, err)
++			mode = "write"
+ 		}
++		logging.Access.LogAccess("open", c.user, name, "error", "mode", mode, "error", err)
+ 		return nil, err
+ 	}
+ 
+-	// Only log size for read operations
++	// Log success with file size for read operations
+ 	if flag&(os.O_WRONLY|os.O_RDWR|os.O_APPEND|os.O_CREATE|os.O_TRUNC) == 0 {
+ 		if fi, err := file.Stat(); err == nil {
+-			logging.LogOpen(c.user, path, logging.ModeRead, fi.Size(), nil)
++			logging.Access.LogAccess("open", c.user, name, "success", "mode", "read", "size", fi.Size())
+ 		} else {
+-			logging.LogOpen(c.user, path, logging.ModeRead, 0, nil)
++			logging.Access.LogAccess("open", c.user, name, "success", "mode", "read")
+ 		}
++	} else {
++		logging.Access.LogAccess("open", c.user, name, "success", "mode", "write")
+ 	}
++
+ 	return file, nil
+ }
+ 
+@@ -363,74 +382,90 @@ func (c *ftpClient) OpenFile(name string, flag int, perm os.FileMode) (afero.Fil
+ func (c *ftpClient) Create(name string) (afero.File, error) {
+ 	path, err := c.resolvePath(name)
+ 	if err != nil {
++		logging.Access.LogAccess("create", c.user, name, "error", "error", err)
+ 		return nil, err
+ 	}
+ 
+ 	if !c.server.authorizer.CanWrite(c.user, path) {
+-		logging.LogCreate(c.user, path, os.ErrPermission)
++		logging.Access.LogAccess("create", c.user, name, "denied")
+ 		return nil, os.ErrPermission
+ 	}
+ 
+ 	file, err := c.fs.Create(path)
+ 	if err != nil {
+-		logging.LogCreate(c.user, path, err)
++		logging.Access.LogAccess("create", c.user, name, "error", "error", err)
+ 		return nil, err
+ 	}
+ 
+-	logging.LogCreate(c.user, path, nil)
++	logging.Access.LogAccess("create", c.user, name, "success")
+ 	return file, nil
+ }
+ 
+ // Mkdir creates a directory - part of afero.Fs interface
+ func (c *ftpClient) Mkdir(name string, perm os.FileMode) error {
+-	path, err := c.resolvePath(name)
++	resolvedPath, err := c.resolvePath(name)
+ 	if err != nil {
++		logging.Access.LogAccess("mkdir", c.user, name, "error", "error", err)
+ 		return err
+ 	}
+ 
+-	if !c.server.authorizer.CanWrite(c.user, path) {
+-		logging.LogMkdir(c.user, path, os.ErrPermission)
++	if !c.server.authorizer.CanWrite(c.user, resolvedPath) {
++		logging.Access.LogAccess("mkdir", c.user, name, "denied")
+ 		return os.ErrPermission
+ 	}
+-	err = c.fs.Mkdir(name, perm)
+-	logging.LogMkdir(c.user, path, err)
+-	return err
++
++	err = c.fs.Mkdir(resolvedPath, perm)
++	if err != nil {
++		logging.Access.LogAccess("mkdir", c.user, name, "error", "error", err)
++		return err
++	}
++
++	logging.Access.LogAccess("mkdir", c.user, name, "success")
++	return nil
+ }
+ 
+ // MkdirAll creates a directory and all parent directories - part of afero.Fs interface
+ func (c *ftpClient) MkdirAll(path string, perm os.FileMode) error {
+ 	resolvedPath, err := c.resolvePath(path)
+ 	if err != nil {
++		logging.Access.LogAccess("mkdirall", c.user, path, "error", "error", err)
+ 		return err
+ 	}
+ 
+ 	if !c.server.authorizer.CanWrite(c.user, resolvedPath) {
+-		logging.LogMkdir(c.user, resolvedPath, os.ErrPermission)
++		logging.Access.LogAccess("mkdirall", c.user, path, "denied")
+ 		return os.ErrPermission
+ 	}
++
+ 	err = c.fs.MkdirAll(resolvedPath, perm)
+-	logging.LogMkdir(c.user, resolvedPath, err)
+-	return err
++	if err != nil {
++		logging.Access.LogAccess("mkdirall", c.user, path, "error", "error", err)
++		return err
++	}
++
++	logging.Access.LogAccess("mkdirall", c.user, path, "success")
++	return nil
+ }
+ 
+ // Remove removes a file - part of afero.Fs interface
+ func (c *ftpClient) Remove(name string) error {
+ 	path, err := c.resolvePath(name)
+ 	if err != nil {
++		logging.Access.LogAccess("remove", c.user, name, "error", "error", err)
+ 		return err
+ 	}
+ 
+ 	if !c.server.authorizer.CanWrite(c.user, path) {
+-		logging.LogDelete(c.user, path, os.ErrPermission)
++		logging.Access.LogAccess("remove", c.user, name, "denied")
+ 		return os.ErrPermission
+ 	}
+ 
+ 	if err := c.fs.Remove(path); err != nil {
+-		logging.LogDelete(c.user, path, err)
++		logging.Access.LogAccess("remove", c.user, name, "error", "error", err)
+ 		return err
+ 	}
+ 
+-	logging.LogDelete(c.user, path, nil)
++	logging.Access.LogAccess("remove", c.user, name, "success")
+ 	return nil
+ }
+ 
+@@ -438,20 +473,21 @@ func (c *ftpClient) Remove(name string) error {
+ func (c *ftpClient) RemoveAll(path string) error {
+ 	resolvedPath, err := c.resolvePath(path)
+ 	if err != nil {
++		logging.Access.LogAccess("removeall", c.user, path, "error", "error", err)
+ 		return err
+ 	}
+ 
+ 	if !c.server.authorizer.CanWrite(c.user, resolvedPath) {
+-		logging.LogDelete(c.user, resolvedPath, os.ErrPermission)
++		logging.Access.LogAccess("removeall", c.user, path, "denied")
+ 		return os.ErrPermission
+ 	}
+ 
+ 	if err := c.fs.RemoveAll(resolvedPath); err != nil {
+-		logging.LogDelete(c.user, resolvedPath, err)
++		logging.Access.LogAccess("removeall", c.user, path, "error", "error", err)
+ 		return err
+ 	}
+ 
+-	logging.LogDelete(c.user, resolvedPath, nil)
++	logging.Access.LogAccess("removeall", c.user, path, "success")
+ 	return nil
+ }
+ 
+@@ -459,25 +495,27 @@ func (c *ftpClient) RemoveAll(path string) error {
+ func (c *ftpClient) Rename(oldname, newname string) error {
+ 	oldPath, err := c.resolvePath(oldname)
+ 	if err != nil {
++		logging.Access.LogAccess("rename", c.user, oldname, "error", "error", err)
+ 		return err
+ 	}
+ 	newPath, err := c.resolvePath(newname)
+ 	if err != nil {
++		logging.Access.LogAccess("rename", c.user, newname, "error", "error", err)
+ 		return err
+ 	}
+ 
+ 	if !c.server.authorizer.CanWrite(c.user, oldPath) ||
+ 		!c.server.authorizer.CanWrite(c.user, newPath) {
+-		logging.LogRename(c.user, oldPath, newPath, os.ErrPermission)
++		logging.Access.LogAccess("rename", c.user, oldname, "denied")
+ 		return os.ErrPermission
+ 	}
+ 
+ 	if err := c.fs.Rename(oldPath, newPath); err != nil {
+-		logging.LogRename(c.user, oldPath, newPath, err)
++		logging.Access.LogAccess("rename", c.user, oldname, "error", "error", err)
+ 		return err
+ 	}
+ 
+-	logging.LogRename(c.user, oldPath, newPath, nil)
++	logging.Access.LogAccess("rename", c.user, oldname, "success")
+ 	return nil
+ }
+ 
+@@ -485,10 +523,12 @@ func (c *ftpClient) Rename(oldname, newname string) error {
+ func (c *ftpClient) Stat(name string) (os.FileInfo, error) {
+ 	path, err := c.resolvePath(name)
+ 	if err != nil {
++		logging.Access.LogAccess("stat", c.user, name, "error", "error", err)
+ 		return nil, err
+ 	}
+ 
+ 	if !c.server.authorizer.CanRead(c.user, path) {
++		logging.Access.LogAccess("stat", c.user, name, "denied")
+ 		return nil, os.ErrPermission
+ 	}
+ 	return c.fs.Stat(path)
+@@ -503,10 +543,12 @@ func (c *ftpClient) Name() string {
+ func (c *ftpClient) Chmod(name string, mode os.FileMode) error {
+ 	path, err := c.resolvePath(name)
+ 	if err != nil {
++		logging.Access.LogAccess("chmod", c.user, name, "error", "error", err)
+ 		return err
+ 	}
+ 
+ 	if !c.server.authorizer.CanWrite(c.user, path) {
++		logging.Access.LogAccess("chmod", c.user, name, "denied")
+ 		return os.ErrPermission
+ 	}
+ 	return c.fs.Chmod(path, mode)
+@@ -516,10 +558,12 @@ func (c *ftpClient) Chmod(name string, mode os.FileMode) error {
+ func (c *ftpClient) Chown(name string, uid, gid int) error {
+ 	path, err := c.resolvePath(name)
+ 	if err != nil {
++		logging.Access.LogAccess("chown", c.user, name, "error", "error", err)
+ 		return err
+ 	}
+ 
+ 	if !c.server.authorizer.CanWrite(c.user, path) {
++		logging.Access.LogAccess("chown", c.user, name, "denied")
+ 		return os.ErrPermission
+ 	}
+ 	return c.fs.Chown(path, uid, gid)
+@@ -528,6 +572,7 @@ func (c *ftpClient) Chown(name string, uid, gid int) error {
+ // Chtimes changes file times - part of afero.Fs interface
+ func (c *ftpClient) Chtimes(name string, atime time.Time, mtime time.Time) error {
+ 	if !c.server.authorizer.CanWrite(c.user, name) {
++		logging.Access.LogAccess("chtimes", c.user, name, "denied")
+ 		return os.ErrPermission
+ 	}
+ 	return c.fs.Chtimes(name, atime, mtime)
+@@ -537,15 +582,18 @@ func (c *ftpClient) Chtimes(name string, atime time.Time, mtime time.Time) error
+ func (c *ftpClient) Size(name string) (int64, error) {
+ 	path, err := c.resolvePath(name)
+ 	if err != nil {
++		logging.Access.LogAccess("size", c.user, name, "error", "error", err)
+ 		return 0, err
+ 	}
+ 
+ 	if !c.server.authorizer.CanRead(c.user, path) {
++		logging.Access.LogAccess("size", c.user, name, "denied")
+ 		return 0, os.ErrPermission
+ 	}
+ 
+ 	info, err := c.fs.Stat(path)
+ 	if err != nil {
++		logging.Access.LogAccess("size", c.user, name, "error", "error", err)
+ 		return 0, err
+ 	}
+ 
+@@ -556,15 +604,18 @@ func (c *ftpClient) Size(name string) (int64, error) {
+ func (c *ftpClient) ModTime(name string) (time.Time, error) {
+ 	path, err := c.resolvePath(name)
+ 	if err != nil {
++		logging.Access.LogAccess("modtime", c.user, name, "error", "error", err)
+ 		return time.Time{}, err
+ 	}
+ 
+ 	if !c.server.authorizer.CanRead(c.user, path) {
++		logging.Access.LogAccess("modtime", c.user, name, "denied")
+ 		return time.Time{}, os.ErrPermission
+ 	}
+ 
+ 	info, err := c.fs.Stat(path)
+ 	if err != nil {
++		logging.Access.LogAccess("modtime", c.user, name, "error", "error", err)
+ 		return time.Time{}, err
+ 	}
+ 
