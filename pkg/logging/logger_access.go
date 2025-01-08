@@ -22,11 +22,14 @@ type accessLogger struct {
 
 // NewAccessLogger creates a new access logger
 func NewAccessLogger(logPath string) (AccessLogger, error) {
-	var writer io.Writer = os.Stdout
-	if logPath != "" {
+	var writer io.Writer
+
+	if logPath == "" {
+		writer = io.Discard
+	} else {
 		f, err := os.OpenFile(logPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("opening access log file: %w", err)
 		}
 		writer = f
 	}
@@ -46,7 +49,7 @@ func (l *accessLogger) LogAccess(operation string, user string, path string, sta
 		parts = append(parts, fmt.Sprintf("path=%s", path))
 	}
 	parts = append(parts, fmt.Sprintf("status=%s", status))
-	
+
 	for i := 0; i < len(details); i += 2 {
 		if i+1 < len(details) {
 			parts = append(parts, fmt.Sprintf("%v=%v", details[i], details[i+1]))
@@ -63,7 +66,7 @@ func (l *accessLogger) LogAuth(operation string, user string, status string, det
 		parts = append(parts, fmt.Sprintf("user=%s", user))
 	}
 	parts = append(parts, fmt.Sprintf("status=%s", status))
-	
+
 	for i := 0; i < len(details); i += 2 {
 		if i+1 < len(details) {
 			parts = append(parts, fmt.Sprintf("%v=%v", details[i], details[i+1]))

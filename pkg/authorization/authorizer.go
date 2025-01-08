@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/mmcdole/viking-ftpd/pkg/logging"
 	"github.com/mmcdole/viking-ftpd/pkg/users"
 )
 
@@ -40,6 +41,7 @@ func (a *Authorizer) HasPermission(username string, filepath string, requiredPer
 // ResolvePermission returns the effective permission for a user on a path
 func (a *Authorizer) ResolvePermission(username string, filepath string) Permission {
 	if err := a.ensureFreshCache(); err != nil {
+		logging.App.Debug("Cache refresh failed", "user", username, "path", filepath, "error", err)
 		return Revoked
 	}
 
@@ -55,6 +57,7 @@ func (a *Authorizer) ResolvePermission(username string, filepath string) Permiss
 
 	// Check implicit permissions first
 	if implicitPerm, ok := a.resolveImplicitPermission(username, parts); ok {
+		logging.App.Debug("Resolved implicit permission", "user", username, "path", filepath, "permission", implicitPerm)
 		return implicitPerm
 	}
 
@@ -62,6 +65,7 @@ func (a *Authorizer) ResolvePermission(username string, filepath string) Permiss
 	if tree, ok := a.trees[username]; ok {
 		perm := a.resolveNodePermission(tree.Root, parts)
 		if perm != Revoked {
+			logging.App.Debug("Resolved direct permission", "user", username, "path", filepath, "permission", perm)
 			return perm
 		}
 	}
@@ -71,6 +75,7 @@ func (a *Authorizer) ResolvePermission(username string, filepath string) Permiss
 		if tree, ok := a.trees[group]; ok {
 			perm := a.resolveNodePermission(tree.Root, parts)
 			if perm != Revoked {
+				logging.App.Debug("Resolved group permission", "user", username, "group", group, "path", filepath, "permission", perm)
 				return perm
 			}
 		}
@@ -78,9 +83,12 @@ func (a *Authorizer) ResolvePermission(username string, filepath string) Permiss
 
 	// Finally check default permissions
 	if tree, ok := a.trees["*"]; ok {
-		return a.resolveNodePermission(tree.Root, parts)
+		perm := a.resolveNodePermission(tree.Root, parts)
+		logging.App.Debug("Using default permission", "user", username, "path", filepath, "permission", perm)
+		return perm
 	}
 
+	logging.App.Debug("No permission found, defaulting to revoked", "user", username, "path", filepath)
 	return Revoked
 }
 
@@ -145,13 +153,16 @@ func (a *Authorizer) CanGrant(username string, filepath string) bool {
 
 // refreshCache loads fresh data from the source
 func (a *Authorizer) refreshCache() error {
+	logging.App.Debug("Refreshing access cache")
 	rawData, err := a.source.LoadAccessData()
 	if err != nil {
+		logging.App.Debug("Failed to load access data", "error", err)
 		return fmt.Errorf("loading raw data: %w", err)
 	}
 
 	trees, err := BuildAccessTrees(rawData)
 	if err != nil {
+		logging.App.Debug("Failed to build access trees", "error", err)
 		return fmt.Errorf("building access trees: %w", err)
 	}
 

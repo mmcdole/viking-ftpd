@@ -1,6 +1,8 @@
 package logging
 
-import "fmt"
+import (
+	"fmt"
+)
 
 // LogLevel represents the severity of a log message
 type LogLevel string
@@ -18,6 +20,29 @@ const (
 	LogLevelPanic LogLevel = "panic"
 )
 
+var (
+	// App is the global application logger
+	App *AppLogger
+	// Access is the global access logger
+	Access AccessLogger
+)
+
+func init() {
+	// Initialize default loggers that write to io.Discard
+	var err error
+
+	// Create no-op loggers by default
+	App, err = NewAppLogger("", LogLevelInfo)
+	if err != nil {
+		panic(fmt.Sprintf("failed to initialize default app logger: %v", err))
+	}
+
+	Access, err = NewAccessLogger("")
+	if err != nil {
+		panic(fmt.Sprintf("failed to initialize default access logger: %v", err))
+	}
+}
+
 // Initialize sets up the global loggers
 func Initialize(accessLogPath, appLogPath string, level LogLevel) error {
 	var err error
@@ -27,17 +52,21 @@ func Initialize(accessLogPath, appLogPath string, level LogLevel) error {
 		level = LogLevelInfo
 	}
 
-	// Initialize access logger first since it's simpler
-	Access, err = NewAccessLogger(accessLogPath)
+	// Initialize access logger
+	newAccess, err := NewAccessLogger(accessLogPath)
 	if err != nil {
 		return fmt.Errorf("failed to initialize access logger: %w", err)
 	}
 
 	// Initialize application logger
-	App, err = NewAppLogger(appLogPath, level)
+	newApp, err := NewAppLogger(appLogPath, level)
 	if err != nil {
 		return fmt.Errorf("failed to initialize app logger: %w", err)
 	}
+
+	// Update global loggers
+	Access = newAccess
+	App = newApp
 
 	return nil
 }
@@ -48,10 +77,3 @@ func MustInitialize(accessLogPath, appLogPath string, level LogLevel) {
 		panic(fmt.Sprintf("failed to initialize logging: %v", err))
 	}
 }
-
-var (
-	// App is the global application logger
-	App *AppLogger
-	// Access is the global access logger
-	Access AccessLogger
-)

@@ -3,6 +3,8 @@ package users
 import (
 	"sync"
 	"time"
+
+	"github.com/mmcdole/viking-ftpd/pkg/logging"
 )
 
 // Repository provides cached access to user data
@@ -35,12 +37,14 @@ func (r *Repository) GetUser(username string) (*User, error) {
 
 	// Return cached value if still fresh
 	if exists && time.Since(lastRefresh) < r.cacheDuration {
+		logging.App.Debug("Using cached user data", "username", username, "cache_age", time.Since(lastRefresh))
 		return user, nil
 	}
 
 	// Load from source
 	user, err := r.source.LoadUser(username)
 	if err != nil {
+		logging.App.Debug("Failed to load user from source", "username", username, "error", err)
 		return nil, err
 	}
 
@@ -50,14 +54,18 @@ func (r *Repository) GetUser(username string) (*User, error) {
 	r.lastRefresh[username] = time.Now()
 	r.mu.Unlock()
 
+	logging.App.Debug("Updated user cache", "username", username)
 	return user, nil
 }
 
 // RefreshUser forces a refresh of user data from the source
 func (r *Repository) RefreshUser(username string) error {
+	logging.App.Debug("Forcing user cache refresh", "username", username)
+	
 	// Load fresh data first before acquiring lock
 	user, err := r.source.LoadUser(username)
 	if err != nil {
+		logging.App.Debug("Failed to refresh user data", "username", username, "error", err)
 		return err
 	}
 
@@ -67,6 +75,7 @@ func (r *Repository) RefreshUser(username string) error {
 	r.lastRefresh[username] = time.Now()
 	r.mu.Unlock()
 
+	logging.App.Debug("Successfully refreshed user cache", "username", username)
 	return nil
 }
 

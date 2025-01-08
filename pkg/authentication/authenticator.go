@@ -2,8 +2,8 @@ package authentication
 
 import (
 	"fmt"
-	"log"
 
+	"github.com/mmcdole/viking-ftpd/pkg/logging"
 	"github.com/mmcdole/viking-ftpd/pkg/users"
 )
 
@@ -24,24 +24,24 @@ func NewAuthenticator(source users.Source, verifier PasswordHashVerifier) *Authe
 // Authenticate verifies a username and password combination.
 // Returns ErrInvalidUsername if user not found, ErrInvalidPassword if password incorrect.
 func (a *Authenticator) Authenticate(username, password string) (*users.User, error) {
-	log.Printf("Authentication attempt for user: %s", username)
+	logging.App.Debug("Authentication attempt", "user", username)
 	
 	user, err := a.source.LoadUser(username)
 	if err != nil {
 		if err == users.ErrUserNotFound {
-			log.Printf("User not found: %s", username)
+			logging.App.Debug("User not found", "user", username)
 			return nil, ErrInvalidUsername
 		}
-		log.Printf("Error loading user %s: %v", username, err)
+		logging.App.Debug("Error loading user", "user", username, "error", err)
 		return nil, fmt.Errorf("loading user: %w", err)
 	}
 
-	log.Printf("Found user %s, verifying password (stored hash: %s)", username, user.PasswordHash)
+	logging.App.Debug("Found user, verifying password", "user", username, "hash", user.PasswordHash)
 	if err := a.verifier.VerifyPassword(password, user.PasswordHash); err != nil {
-		log.Printf("Password verification failed for user %s: %v", username, err)
+		logging.App.Debug("Password verification failed", "user", username, "error", err)
 		return nil, ErrInvalidPassword
 	}
 
-	log.Printf("Authentication successful for user: %s", username)
+	logging.App.Debug("Authentication successful", "user", username)
 	return user, nil
 }
