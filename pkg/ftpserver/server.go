@@ -123,7 +123,7 @@ func (d *ftpDriver) AuthUser(cc ftpserverlib.ClientContext, user, pass string) (
 	// Authenticate user
 	_, err := d.server.authenticator.Authenticate(user, pass)
 	if err != nil {
-		logging.Access.LogAuth("login", user, "failed", "error", err)
+		logging.Access.LogAuth("login", user, "failed", "error", err, "client_ip", cc.RemoteAddr().String())
 		return nil, fmt.Errorf("authentication failed: %w", err)
 	}
 
@@ -144,7 +144,7 @@ func (d *ftpDriver) AuthUser(cc ftpserverlib.ClientContext, user, pass string) (
 
 	cc.SetDebug(logging.App.IsDebug())
 
-	logging.Access.LogAuth("login", user, "success")
+	logging.Access.LogAuth("login", user, "success", "client_ip", cc.RemoteAddr().String())
 	return &ftpClient{
 		server:   d.server,
 		user:     user,

@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"strings"
+	"time"
 )
 
 // AccessLogger defines the interface for FTP operation logging
@@ -35,7 +36,7 @@ func NewAccessLogger(logPath string) (AccessLogger, error) {
 	}
 
 	return &accessLogger{
-		logger: log.New(writer, "", log.LstdFlags),
+		logger: log.New(writer, "", 0), // No flags, we'll handle formatting ourselves
 	}, nil
 }
 
@@ -56,7 +57,8 @@ func (l *accessLogger) LogAccess(operation string, user string, path string, sta
 		}
 	}
 
-	l.logger.Print(strings.Join(parts, " "))
+	timestamp := time.Now().UTC().Format("2006-01-02 15:04:05 -0700")
+	l.logger.Printf("%s %s", timestamp, strings.Join(parts, " "))
 }
 
 func (l *accessLogger) LogAuth(operation string, user string, status string, details ...interface{}) {
@@ -73,5 +75,6 @@ func (l *accessLogger) LogAuth(operation string, user string, status string, det
 		}
 	}
 
-	l.logger.Print(strings.Join(parts, " "))
+	timestamp := time.Now().UTC().Format("2006-01-02 15:04:05 -0700")
+	l.logger.Printf("%s %s", timestamp, strings.Join(parts, " "))
 }

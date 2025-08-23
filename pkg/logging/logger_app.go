@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"strings"
+	"time"
 
 	golog "github.com/fclairamb/go-log"
 )
@@ -29,7 +30,7 @@ func NewAppLogger(logPath string, level LogLevel) (*AppLogger, error) {
 
 	return &AppLogger{
 		level:  level,
-		logger: log.New(writer, "", log.LstdFlags),
+		logger: log.New(writer, "", 0), // No flags, we'll handle formatting ourselves
 	}, nil
 }
 
@@ -60,7 +61,8 @@ func (l *AppLogger) log(level LogLevel, message string, keyvals ...interface{}) 
 	}
 	kvStr := strings.Join(kvStrings, " ")
 	
-	l.logger.Printf("%s: %s %s", level, message, kvStr)
+	timestamp := time.Now().UTC().Format("2006-01-02 15:04:05 -0700")
+	l.logger.Printf("%s %s: %s %s", timestamp, level, message, kvStr)
 }
 
 func toString(v interface{}) string {
