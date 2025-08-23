@@ -40,20 +40,32 @@ func NewAccessLogger(logPath string) (AccessLogger, error) {
 	}, nil
 }
 
+// formatValue formats a value for logfmt, quoting if necessary
+func formatValue(v interface{}) string {
+	s := fmt.Sprintf("%v", v)
+	// Quote if contains space, equals, or quotes
+	if strings.ContainsAny(s, " =\"") {
+		// Escape existing quotes
+		s = strings.ReplaceAll(s, "\"", "\\\"")
+		return fmt.Sprintf("\"%s\"", s)
+	}
+	return s
+}
+
 func (l *accessLogger) LogAccess(operation string, user string, path string, status string, details ...interface{}) {
 	var parts []string
-	parts = append(parts, fmt.Sprintf("op=%s", operation))
+	parts = append(parts, fmt.Sprintf("op=%s", formatValue(operation)))
 	if user != "" {
-		parts = append(parts, fmt.Sprintf("user=%s", user))
+		parts = append(parts, fmt.Sprintf("user=%s", formatValue(user)))
 	}
 	if path != "" {
-		parts = append(parts, fmt.Sprintf("path=%s", path))
+		parts = append(parts, fmt.Sprintf("path=%s", formatValue(path)))
 	}
-	parts = append(parts, fmt.Sprintf("status=%s", status))
+	parts = append(parts, fmt.Sprintf("status=%s", formatValue(status)))
 
 	for i := 0; i < len(details); i += 2 {
 		if i+1 < len(details) {
-			parts = append(parts, fmt.Sprintf("%v=%v", details[i], details[i+1]))
+			parts = append(parts, fmt.Sprintf("%v=%s", details[i], formatValue(details[i+1])))
 		}
 	}
 
@@ -63,15 +75,15 @@ func (l *accessLogger) LogAccess(operation string, user string, path string, sta
 
 func (l *accessLogger) LogAuth(operation string, user string, status string, details ...interface{}) {
 	var parts []string
-	parts = append(parts, fmt.Sprintf("op=%s", operation))
+	parts = append(parts, fmt.Sprintf("op=%s", formatValue(operation)))
 	if user != "" {
-		parts = append(parts, fmt.Sprintf("user=%s", user))
+		parts = append(parts, fmt.Sprintf("user=%s", formatValue(user)))
 	}
-	parts = append(parts, fmt.Sprintf("status=%s", status))
+	parts = append(parts, fmt.Sprintf("status=%s", formatValue(status)))
 
 	for i := 0; i < len(details); i += 2 {
 		if i+1 < len(details) {
-			parts = append(parts, fmt.Sprintf("%v=%v", details[i], details[i+1]))
+			parts = append(parts, fmt.Sprintf("%v=%s", details[i], formatValue(details[i+1])))
 		}
 	}
 
