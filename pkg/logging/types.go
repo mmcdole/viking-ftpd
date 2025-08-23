@@ -2,6 +2,7 @@ package logging
 
 import (
 	"fmt"
+	"strings"
 )
 
 // LogLevel represents the severity of a log message
@@ -76,4 +77,16 @@ func MustInitialize(accessLogPath, appLogPath string, level LogLevel) {
 	if err := Initialize(accessLogPath, appLogPath, level); err != nil {
 		panic(fmt.Sprintf("failed to initialize logging: %v", err))
 	}
+}
+
+// formatValue formats a value for logfmt, quoting if necessary
+func formatValue(v interface{}) string {
+	s := fmt.Sprintf("%v", v)
+	// Quote if contains space, equals, or quotes
+	if strings.ContainsAny(s, " =\"") {
+		// Escape existing quotes
+		s = strings.ReplaceAll(s, "\"", "\\\"")
+		return fmt.Sprintf("\"%s\"", s)
+	}
+	return s
 }

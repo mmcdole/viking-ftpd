@@ -40,17 +40,6 @@ func NewAccessLogger(logPath string) (AccessLogger, error) {
 	}, nil
 }
 
-// formatValue formats a value for logfmt, quoting if necessary
-func formatValue(v interface{}) string {
-	s := fmt.Sprintf("%v", v)
-	// Quote if contains space, equals, or quotes
-	if strings.ContainsAny(s, " =\"") {
-		// Escape existing quotes
-		s = strings.ReplaceAll(s, "\"", "\\\"")
-		return fmt.Sprintf("\"%s\"", s)
-	}
-	return s
-}
 
 func (l *accessLogger) LogAccess(operation string, user string, path string, status string, details ...interface{}) {
 	var parts []string

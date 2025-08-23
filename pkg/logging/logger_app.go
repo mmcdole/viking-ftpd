@@ -34,17 +34,6 @@ func NewAppLogger(logPath string, level LogLevel) (*AppLogger, error) {
 	}, nil
 }
 
-// formatValue formats a value for logfmt, quoting if necessary
-func formatValue(v interface{}) string {
-	s := fmt.Sprintf("%v", v)
-	// Quote if contains space, equals, or quotes
-	if strings.ContainsAny(s, " =\"") {
-		// Escape existing quotes
-		s = strings.ReplaceAll(s, "\"", "\\\"")
-		return fmt.Sprintf("\"%s\"", s)
-	}
-	return s
-}
 
 func (l *AppLogger) shouldLog(level LogLevel) bool {
 	levels := map[LogLevel]int{
