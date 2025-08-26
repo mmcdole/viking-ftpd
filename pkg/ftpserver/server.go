@@ -124,7 +124,7 @@ func (d *ftpDriver) AuthUser(cc ftpserverlib.ClientContext, user, pass string) (
 	_, err := d.server.authenticator.Authenticate(user, pass)
 	if err != nil {
 		logging.Access.LogAuth("login", user, "failed", "error", err, "client_ip", cc.RemoteAddr().String())
-		return nil, fmt.Errorf("authentication failed: %w", err)
+		return nil, fmt.Errorf("authentication failed")
 	}
 
 	// Create filesystem with root already handled
