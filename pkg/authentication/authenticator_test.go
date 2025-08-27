@@ -78,13 +78,19 @@ func TestAuthenticator_Authenticate(t *testing.T) {
 			name:     "invalid password",
 			username: "user1",
 			password: "wrongpass",
-			wantErr:  ErrInvalidPassword,
+			wantErr:  ErrInvalidCredentials,
 		},
 		{
 			name:     "user not found",
 			username: "nonexistent",
 			password: "testpass123",
-			wantErr:  ErrInvalidUsername,
+			wantErr:  ErrInvalidCredentials,
+		},
+		{
+			name:     "user not found with wrong password",
+			username: "nonexistent",
+			password: "wrongpass",
+			wantErr:  ErrInvalidCredentials,
 		},
 	}
 
