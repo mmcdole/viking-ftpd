@@ -228,7 +228,7 @@ func TestLineParsing(t *testing.T) {
 					tt.setup(t)
 				}
 				lp := NewLineParser(tt.line)
-				key, val, err := lp.ParseLine()
+				key, val, err := lp.ParseLine(nil)
 				if (err != nil) != tt.wantErr {
 					t.Errorf("ParseLine() error = %v, wantErr %v", err, tt.wantErr)
 					return

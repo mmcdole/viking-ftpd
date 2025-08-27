@@ -110,7 +110,7 @@ func (p *ObjectParser) ParseObject(input string) (*ParseResult, error) {
 
 		// Parse key and value
 		lp := NewLineParser(line)
-		key, value, err := lp.parseLineWithContext(ctx)
+		key, value, err := lp.ParseLine(ctx)
 		if err != nil {
 			parseErr := &ParseError{
 				Line:     lineNum + 1,
@@ -144,56 +144,8 @@ func (p *ObjectParser) ParseObject(input string) (*ParseResult, error) {
 // - Exactly one space between key and value
 // - No tabs allowed
 // - Line must end with newline or EOF
-func (p *LineParser) ParseLine() (string, interface{}, error) {
-	// Skip comment lines
-	if p.peek(0) == '#' {
-		return "", nil, nil
-	}
-
-	// Skip empty lines
-	if p.peek(0) == '\n' || p.peek(0) == 0 {
-		return "", nil, nil
-	}
-
-	// Leading whitespace is not allowed
-	if p.peek(0) == ' ' || p.peek(0) == '\t' {
-		return "", nil, fmt.Errorf("leading whitespace not allowed at position %d", p.pos)
-	}
-
-	// Parse identifier - must start with letter or underscore
-	key, err := p.parseIdentifier()
-	if err != nil {
-		return "", nil, err
-	}
-
-	// Check for exactly one space after key
-	if p.peek(0) != ' ' {
-		return "", nil, fmt.Errorf("expected single space after key at position %d", p.pos)
-	}
-	p.next() // consume the single space
-	if p.peek(0) == ' ' || p.peek(0) == '\t' {
-		return "", nil, fmt.Errorf("multiple spaces or tabs not allowed at position %d", p.pos)
-	}
-
-	value, err := p.parseValue(nil)
-	if err != nil {
-		return "", nil, err
-	}
-
-	// Check for trailing whitespace
-	r := p.peek(0)
-	if r == ' ' || r == '\t' {
-		return "", nil, fmt.Errorf("trailing whitespace not allowed at position %d", p.pos)
-	}
-	if r != '\n' && r != 0 {
-		return "", nil, fmt.Errorf("expected newline or end of file at position %d", p.pos)
-	}
-
-	return key, value, nil
-}
-
-// parseLineWithContext parses a line with context for object parsing
-func (p *LineParser) parseLineWithContext(ctx *ParsingContext) (string, interface{}, error) {
+// The ctx parameter can be nil for simple parsing, or provided to enable reference resolution.
+func (p *LineParser) ParseLine(ctx *ParsingContext) (string, interface{}, error) {
 	// Skip comment lines
 	if p.peek(0) == '#' {
 		return "", nil, nil
