@@ -84,7 +84,8 @@ func (d *ftpDriver) GetSettings() (*ftpserverlib.Settings, error) {
 			Start: d.server.config.PasvPortRange[0],
 			End:   d.server.config.PasvPortRange[1],
 		},
-		TLSRequired: ftpserverlib.ClearOrEncrypted,
+		TLSRequired:       ftpserverlib.ClearOrEncrypted,
+		DisableActiveMode: true,
 	}
 
 	if d.server.config.PasvAddress != "" {
