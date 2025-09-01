@@ -105,7 +105,7 @@ Configuration file must be in JSON format with the following structure:
 			PasvPortRange: config.PasvPortRange,
 			PasvAddress:   config.PasvAddress,
 			PasvIPVerify:  config.PasvIPVerify,
-		}, authorizer, authenticator)
+		}, authorizer, authenticator, version)
 		if err != nil {
 			return fmt.Errorf("failed to create FTP server: %v", err)
 		}

@@ -34,10 +34,11 @@ type Server struct {
 	authenticator *authentication.Authenticator
 	authorizer    *authorization.Authorizer
 	server        *ftpserverlib.FtpServer
+	version       string
 }
 
 // New creates a new FTP server
-func New(config *Config, authorizer *authorization.Authorizer, authenticator *authentication.Authenticator) (*Server, error) {
+func New(config *Config, authorizer *authorization.Authorizer, authenticator *authentication.Authenticator, version string) (*Server, error) {
 	// Validate config
 	if _, err := os.Stat(config.RootDir); err != nil {
 		return nil, fmt.Errorf("root directory does not exist: %w", err)
@@ -47,6 +48,7 @@ func New(config *Config, authorizer *authorization.Authorizer, authenticator *au
 		config:        config,
 		authorizer:    authorizer,
 		authenticator: authenticator,
+		version:       version,
 	}
 
 	driver := &ftpDriver{server: s}
@@ -109,7 +111,7 @@ func (d *ftpDriver) ClientConnected(cc ftpserverlib.ClientContext) (string, erro
 		cc.SetDebug(true)
 	}
 	logging.Access.LogAccess("connect", "", cc.RemoteAddr().String(), "success")
-	return "Welcome to Viking FTP server", nil
+	return fmt.Sprintf("Welcome to Viking FTP server (%s)", d.server.version), nil
 }
 
 // ClientDisconnected is called when a client disconnects
