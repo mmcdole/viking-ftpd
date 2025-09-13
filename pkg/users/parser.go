@@ -37,6 +37,6 @@ func ParseUserFile(data []byte) (*User, error) {
 
 	return &User{
 		PasswordHash: passwordHash,
-		Level:       level,
+		Level:        level,
 	}, nil
 }

@@ -6,7 +6,7 @@ A custom FTP server designed specifically for [VikingMUD](https://www.vikingmud.
 ## Installation
 
 ### Building
-Requires Go 1.19 or higher. Build using the provided Makefile:
+Requires Go 1.22 or higher. Build using the provided Makefile:
 
 ```bash
 make build   # Creates vkftpd binary with version information

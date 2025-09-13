@@ -31,7 +31,7 @@ func (s *mockSource) addUser(username, passwordHash string, level int) {
 	s.users[username] = &users.User{
 		Username:     username,
 		PasswordHash: passwordHash,
-		Level:       level,
+		Level:        level,
 	}
 }
 
@@ -61,11 +61,11 @@ func TestAuthenticator_Authenticate(t *testing.T) {
 	auth := NewAuthenticator(source, verifier)
 
 	tests := []struct {
-		name          string
-		username      string
-		password      string
-		wantErr       error
-		wantLevel     int
+		name      string
+		username  string
+		password  string
+		wantErr   error
+		wantLevel int
 	}{
 		{
 			name:      "valid credentials",

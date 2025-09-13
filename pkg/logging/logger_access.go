@@ -40,7 +40,6 @@ func NewAccessLogger(logPath string) (AccessLogger, error) {
 	}, nil
 }
 
-
 func (l *accessLogger) LogAccess(operation string, user string, path string, status string, details ...interface{}) {
 	var parts []string
 	parts = append(parts, fmt.Sprintf("op=%s", formatValue(operation)))

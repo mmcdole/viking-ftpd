@@ -34,7 +34,6 @@ func NewAppLogger(logPath string, level LogLevel) (*AppLogger, error) {
 	}, nil
 }
 
-
 func (l *AppLogger) shouldLog(level LogLevel) bool {
 	levels := map[LogLevel]int{
 		LogLevelDebug: 0,
@@ -50,7 +49,7 @@ func (l *AppLogger) log(level LogLevel, message string, keyvals ...interface{}) 
 	if !l.shouldLog(level) {
 		return
 	}
-	
+
 	// Format key-value pairs
 	var kvStrings []string
 	for i := 0; i < len(keyvals); i += 2 {
@@ -61,7 +60,7 @@ func (l *AppLogger) log(level LogLevel, message string, keyvals ...interface{}) 
 		}
 	}
 	kvStr := strings.Join(kvStrings, " ")
-	
+
 	timestamp := time.Now().UTC().Format("2006-01-02 15:04:05 -0700")
 	l.logger.Printf("%s %s: %s %s", timestamp, level, message, kvStr)
 }
@@ -70,7 +69,7 @@ func toString(v interface{}) string {
 	if v == nil {
 		return ""
 	}
-	
+
 	str := fmt.Sprintf("%v", v)
 	// Clean up the string
 	str = strings.ReplaceAll(str, "\n", " ")

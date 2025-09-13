@@ -22,8 +22,8 @@ func NewRepository(source Source, cacheDuration time.Duration) *Repository {
 	return &Repository{
 		source:        source,
 		cacheDuration: cacheDuration,
-		cache:        make(map[string]*User),
-		lastRefresh:  make(map[string]time.Time),
+		cache:         make(map[string]*User),
+		lastRefresh:   make(map[string]time.Time),
 	}
 }
 
@@ -61,7 +61,7 @@ func (r *Repository) GetUser(username string) (*User, error) {
 // RefreshUser forces a refresh of user data from the source
 func (r *Repository) RefreshUser(username string) error {
 	logging.App.Debug("Forcing user cache refresh", "username", username)
-	
+
 	// Load fresh data first before acquiring lock
 	user, err := r.source.LoadUser(username)
 	if err != nil {

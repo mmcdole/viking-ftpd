@@ -25,9 +25,9 @@ func NewObjectParser(strict bool) *ObjectParser {
 
 // ParseError represents an error that occurred while parsing a specific line
 type ParseError struct {
-	Line     int    // The line number where the error occurred
-	Position int    // Position within the line where the error occurred
-	Err      error  // The specific error encountered
+	Line     int   // The line number where the error occurred
+	Position int   // Position within the line where the error occurred
+	Err      error // The specific error encountered
 }
 
 func (e *ParseError) Error() string {
@@ -234,7 +234,7 @@ func (p *LineParser) parseArray() ([]interface{}, error) {
 
 	// Parse elements
 	elements := make([]interface{}, 0)
-	
+
 	// Handle empty array cases (with or without trailing comma)
 	p.skipSpaces()
 	if p.peek(0) == '}' && p.peek(1) == ')' {

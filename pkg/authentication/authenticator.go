@@ -24,14 +24,15 @@ func NewAuthenticator(source users.Source, verifier PasswordHashVerifier) *Authe
 // This implements constant-time authentication by always performing password verification.
 func (a *Authenticator) Authenticate(username, password string) (*users.User, error) {
 	logging.App.Debug("Authentication attempt", "user", username)
-	
+
 	user, err := a.source.LoadUser(username)
 	var userExists bool = err == nil
 	var passwordHash string
-	
+
 	if userExists {
 		passwordHash = user.PasswordHash
-		logging.App.Debug("Found user, verifying password", "user", username, "hash", passwordHash)
+		// Do not log password hashes
+		logging.App.Debug("Found user, verifying password", "user", username)
 	} else {
 		// Use a dummy hash to maintain constant timing behavior
 		// This is a bcrypt hash of "dummy" to ensure consistent verification time
@@ -45,17 +46,17 @@ func (a *Authenticator) Authenticate(username, password string) (*users.User, er
 
 	// Always perform password verification to prevent timing attacks
 	passwordErr := a.verifier.VerifyPassword(password, passwordHash)
-	
+
 	// Only return success if user exists AND password is correct
 	if userExists && passwordErr == nil {
 		logging.App.Debug("Authentication successful", "user", username)
 		return user, nil
 	}
-	
+
 	// Log specific failure reason for debugging, but return generic error
 	if userExists {
 		logging.App.Debug("Password verification failed", "user", username, "error", passwordErr)
 	}
-	
+
 	return nil, ErrInvalidCredentials
 }

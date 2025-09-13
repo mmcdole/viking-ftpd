@@ -1,10 +1,10 @@
 package authorization
 
 import (
+	"reflect"
+	"sort"
 	"testing"
 	"time"
-	"sort"
-	"reflect"
 
 	"github.com/mmcdole/viking-ftpd/pkg/users"
 )
@@ -71,10 +71,10 @@ func productionTree() map[string]interface{} {
 	return map[string]interface{}{
 		"access_map": map[string]interface{}{
 			"*": map[string]interface{}{
-				".": Read, // Everyone can read root directory
-				"*": Revoked,
-				"accounts": Revoked,    // Private directory
-				"characters": Revoked,  // Private directory
+				".":          Read, // Everyone can read root directory
+				"*":          Revoked,
+				"accounts":   Revoked, // Private directory
+				"characters": Revoked, // Private directory
 				"data": map[string]interface{}{
 					"*": Revoked, // Private directory
 				},
@@ -104,8 +104,8 @@ func productionTree() map[string]interface{} {
 				"*": GrantGrant,
 			},
 			"Arch_junior": map[string]interface{}{
-				".": GrantWrite,
-				"*": GrantWrite,
+				".":      GrantWrite,
+				"*":      GrantWrite,
 				"secure": Write,
 			},
 		},
@@ -194,13 +194,12 @@ func groupTree() map[string]interface{} {
 			},
 		},
 	}
-}	
+}
 
 func TestProductionExample(t *testing.T) {
 	// Create mock user source
 	source := newMockUserSource()
 	source.addUser("wizard1", users.WIZARD)
-
 
 	auth := NewAuthorizer(newMockAccessSource(productionTree()), source, time.Hour)
 
@@ -232,7 +231,7 @@ func TestCorePermissions(t *testing.T) {
 	// Create mock user source
 	source := newMockUserSource()
 	source.addUser("user", users.WIZARD)      // Use WIZARD level for user-specific permissions
-	source.addUser("anonymous", users.WIZARD)  // Use WIZARD for testing basic permissions
+	source.addUser("anonymous", users.WIZARD) // Use WIZARD for testing basic permissions
 
 	auth := NewAuthorizer(newMockAccessSource(coreTree()), source, time.Hour)
 	if err := auth.refreshCache(); err != nil {
@@ -299,8 +298,8 @@ func TestCorePermissions(t *testing.T) {
 func TestGroupPermissions(t *testing.T) {
 	// Create mock user source with test users - use WIZARD level since they need file access
 	source := newMockUserSource()
-	source.addUser("user1", users.WIZARD)  // WIZARD level for group membership tests
-	source.addUser("user2", users.WIZARD)  // WIZARD level for group membership tests
+	source.addUser("user1", users.WIZARD) // WIZARD level for group membership tests
+	source.addUser("user2", users.WIZARD) // WIZARD level for group membership tests
 
 	auth := NewAuthorizer(newMockAccessSource(groupTree()), source, time.Hour)
 	if err := auth.refreshCache(); err != nil {
@@ -353,7 +352,7 @@ func TestImplicitPermissions(t *testing.T) {
 			{"deep-open", "wizard", "/players/arch/deep/open", Revoked},
 
 			// Home directory trumps group permissions
-			{"home-trumps-group", "arch", "/players/arch/doc.txt", GrantGrant}, // Even with doc group, home dir wins
+			{"home-trumps-group", "arch", "/players/arch/doc.txt", GrantGrant},   // Even with doc group, home dir wins
 			{"home-trumps-domain", "wizard", "/players/wizard/open", GrantGrant}, // Even with domain access, home dir wins
 		}
 		runTests(t, auth, cases)
@@ -408,8 +407,8 @@ func TestGroupMembership(t *testing.T) {
 				"*": GrantGrant,
 			},
 			"Arch_junior": map[string]interface{}{
-				".": GrantWrite,
-				"*": GrantWrite,
+				".":      GrantWrite,
+				"*":      GrantWrite,
 				"secure": Write,
 			},
 		},
@@ -453,7 +452,7 @@ func TestGroupMembership(t *testing.T) {
 			sort.Strings(got)
 			sort.Strings(tt.want)
 			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("ResolveGroups(%q) = %v (type %T), want %v (type %T)", 
+				t.Errorf("ResolveGroups(%q) = %v (type %T), want %v (type %T)",
 					tt.username, got, got, tt.want, tt.want)
 			}
 		})
