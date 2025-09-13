@@ -55,6 +55,9 @@ The daemon supports two hashing schemes during migration:
 - The first two characters of the hash are the salt used
 - Compatible with the standard Unix `crypt(3)` function from libc
 
+For background on the legacy `crypt(3)` algorithm, see:
+https://en.wikipedia.org/wiki/Crypt_(C)
+
 Example hash format: `XXyyyyyyyyyyy` where:
 - `XX`: The two-character salt
 - `yyyyyyyyyyy`: The remaining 11 characters of the hash
