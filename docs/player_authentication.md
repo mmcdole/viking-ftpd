@@ -40,11 +40,15 @@ experience 990147374
 
 For authentication purposes, the most important field is:
 
-- `password`: Contains the character's password hash using Unix crypt format
+- `password`: Contains the character's password hash. Supported formats:
+  - Legacy Unix `crypt(3)` (13-char DES hash)
+  - Argon2id in PHC format: `$argon2id$v=19$m=...,t=...,p=...$<salt_b64>$<hash_b64>`
 
 ### Password Hashing
 
-Passwords are hashed using the [DES-based Unix crypt(3)](https://en.wikipedia.org/wiki/Crypt_(C)) algorithm with the following characteristics:
+The daemon supports two hashing schemes during migration:
+
+1) DES-based Unix `crypt(3)` (legacy)
 
 - Uses the first two characters of the password as the salt
 - Produces a 13-character hash string using a modified version of DES
@@ -55,7 +59,12 @@ Example hash format: `XXyyyyyyyyyyy` where:
 - `XX`: The two-character salt
 - `yyyyyyyyyyy`: The remaining 11 characters of the hash
 
-Note: The traditional Unix crypt algorithm only uses the first 8 characters of the password. Any characters beyond the 8th position are silently ignored during both hashing and verification. This is a limitation of the original algorithm and is preserved for compatibility with existing character files.
+Note: The traditional Unix crypt algorithm only uses the first 8 characters of the password. Any characters beyond the 8th position are ignored; kept for compatibility with existing character files.
+
+2) Argon2id (modern)
+
+- Store full PHC string, e.g.: `$argon2id$v=19$m=65536,t=2,p=1$MDEyMzQ1Njc4OWFiY2RlZg$<hash>`
+- The server auto-detects Argon2id by the `$argon2id$` prefix
 
 ### Authentication Process
 
@@ -63,7 +72,6 @@ Note: The traditional Unix crypt algorithm only uses the first 8 characters of t
 2. The system locates the character file in `characters/[first_letter]/[username].o`
 3. The file is parsed as an LPC object to extract the password hash
 4. The provided password is verified against the stored hash:
-   - The first two characters of the stored hash are used as the salt
-   - The password is hashed using this salt
-   - The resulting hash is compared with the stored hash
-   - If they match, authentication succeeds
+   - If the hash starts with `$argon2id$`, verify using Argon2id with the stored parameters/salt
+   - Otherwise, verify using legacy Unix crypt with the salt from the first two characters
+   - Authentication succeeds only if verification passes

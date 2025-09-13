@@ -81,7 +81,7 @@ If TLS certificate and key files are provided, the server will support both FTP 
 
 | Package | Description |
 |---------|------------|
-| `authentication` | Handles user authentication by verifying credentials against the MUD's [player authentication system](docs/player_authentication.md). Validates password hashes using the MUD's native format. |
+| `authentication` | Handles user authentication by verifying credentials against the MUD's [player authentication system](docs/player_authentication.md). Supports legacy unixcrypt and new Argon2id (PHC format) hashes. |
 | `authorization` | Implements permission checking by parsing the MUD's `access.o` object tree. Validates user access rights against the MUD's [hierarchical permission system](docs/viking_access_tree.md). The access tree is cached to reduce filesystem reads. |
 | `ftpserver` | Core FTP server implementation built on [ftpserverlib](https://github.com/fclairamb/ftpserverlib). Handles FTP protocol operations while integrating with MUD-specific authentication and authorization. |
 | `lpc` | Parses [LPC (Lars Pensjo C) serialized object format](https://github.com/mmcdole/viking-ftpd/blob/main/docs/lpc_object_format.md) used by LPMuds. Enables direct reading of MUD's data structures like the access control tree. |
