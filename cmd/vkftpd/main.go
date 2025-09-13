@@ -88,7 +88,7 @@ Configuration file must be in JSON format with the following structure:
 		charSource := users.NewFileSource(config.CharacterDirPath)
 
 		// Create authenticator
-		authenticator := authentication.NewAuthenticator(charSource, authentication.NewUnixCrypt())
+		authenticator := authentication.NewAuthenticator(charSource, authentication.NewMultiHashVerifier())
 
 		// Create authorizer for permission checks
 		accessSource := authorization.NewAccessFileSource(config.AccessFilePath)
