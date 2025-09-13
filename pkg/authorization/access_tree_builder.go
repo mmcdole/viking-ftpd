@@ -103,7 +103,7 @@ func buildAccessNode(data map[string]interface{}) (*AccessNode, []string, error)
 					return nil, nil, fmt.Errorf("parsing permission for %s: %w", key, err)
 				}
 				child := &AccessNode{
-					DotAccess: perm,
+					DotAccess:  perm,
 					StarAccess: perm,
 					Children:   make(map[string]*AccessNode),
 				}

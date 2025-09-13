@@ -69,27 +69,27 @@ Configuration file must be in JSON format with the following structure:
 			var err error
 			cfgFile, err = filepath.Abs(cfgFile)
 			if err != nil {
-				return fmt.Errorf("failed to get absolute path: %v", err)
+				return fmt.Errorf("failed to get absolute path: %w", err)
 			}
 		}
 
 		// Load configuration
 		var config Config
 		if err := LoadConfig(cfgFile, &config); err != nil {
-			return fmt.Errorf("failed to load config: %v", err)
+			return fmt.Errorf("failed to load config: %w", err)
 		}
 
 		// Initialize logging
 		if err := logging.Initialize(config.AccessLogPath, config.AppLogPath, logging.LogLevel(config.LogLevel)); err != nil {
-			return fmt.Errorf("failed to initialize logging: %v", err)
+			return fmt.Errorf("failed to initialize logging: %w", err)
 		}
 
 		// Create user source
 		charSource := users.NewFileSource(config.CharacterDirPath)
 
 		// Create authenticator
-    // Use a multi-hash verifier that supports both legacy unixcrypt and argon2id
-    authenticator := authentication.NewAuthenticator(charSource, authentication.NewVerifier())
+		// Use a multi-hash verifier that supports both legacy unixcrypt and argon2id
+		authenticator := authentication.NewAuthenticator(charSource, authentication.NewVerifier())
 
 		// Create authorizer for permission checks
 		accessSource := authorization.NewAccessFileSource(config.AccessFilePath)
@@ -108,10 +108,10 @@ Configuration file must be in JSON format with the following structure:
 			PasvIPVerify:  config.PasvIPVerify,
 		}, authorizer, authenticator, version)
 		if err != nil {
-			return fmt.Errorf("failed to create FTP server: %v", err)
+			return fmt.Errorf("failed to create FTP server: %w", err)
 		}
 
-		fmt.Printf("Starting VikingMUD FTP Server %s on %s:%d\n", version, config.ListenAddr, config.Port)
+		logging.App.Info("Starting VikingMUD FTP Server", "version", version, "listen_addr", config.ListenAddr, "port", config.Port)
 		return server.ListenAndServe()
 	},
 }
