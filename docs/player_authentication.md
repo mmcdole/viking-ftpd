@@ -48,15 +48,12 @@ For authentication purposes, the most important field is:
 
 The daemon supports two hashing schemes during migration:
 
-1) DES-based Unix `crypt(3)` (legacy)
+1) [DES-based Unix crypt(3)](https://en.wikipedia.org/wiki/Crypt_(C)) (legacy)
 
 - Uses the first two characters of the password as the salt
 - Produces a 13-character hash string using a modified version of DES
 - The first two characters of the hash are the salt used
 - Compatible with the standard Unix `crypt(3)` function from libc
-
-For background on the legacy `crypt(3)` algorithm, see:
-https://en.wikipedia.org/wiki/Crypt_(C)
 
 Example hash format: `XXyyyyyyyyyyy` where:
 - `XX`: The two-character salt
