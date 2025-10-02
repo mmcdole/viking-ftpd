@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"time"
 
 	ftpserverlib "github.com/fclairamb/ftpserverlib"
@@ -246,6 +247,11 @@ func (c *ftpClient) ReadDir(name string) ([]os.FileInfo, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	// Sort entries alphabetically by name
+	sort.Slice(entries, func(i, j int) bool {
+		return entries[i].Name() < entries[j].Name()
+	})
 
 	logging.Access.LogAccess("readdir", c.user, path, "success", "count", len(entries))
 	return entries, nil
