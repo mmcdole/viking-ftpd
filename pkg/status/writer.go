@@ -25,8 +25,9 @@ type Writer struct {
 	version         string
 	metricsProvider MetricsProvider
 
-	stopCh chan struct{}
-	wg     sync.WaitGroup
+	stopCh       chan struct{}
+	wg           sync.WaitGroup
+	shutdownOnce sync.Once
 }
 
 // New creates a new status Writer
@@ -130,6 +131,32 @@ func (w *Writer) Stop() {
 	close(w.stopCh)
 	w.wg.Wait()
 	logging.App.Info("Stopped status heartbeat")
+}
+
+// Shutdown performs a graceful shutdown: stops heartbeat and writes stop file
+// This method is idempotent and safe to call multiple times
+func (w *Writer) Shutdown(reason string) error {
+	var shutdownErr error
+	w.shutdownOnce.Do(func() {
+		// Stop the heartbeat
+		close(w.stopCh)
+		w.wg.Wait()
+
+		// Calculate uptime
+		var uptime time.Duration
+		if w.metricsProvider != nil {
+			uptime = time.Since(w.metricsProvider.GetStartTime())
+		}
+
+		// Write stop file
+		if err := w.WriteStopFile(reason, uptime); err != nil {
+			shutdownErr = err
+			logging.App.Error("Failed to write stop file", "error", err)
+		} else {
+			logging.App.Info("Status writer shutdown complete", "reason", reason)
+		}
+	})
+	return shutdownErr
 }
 
 // writeRunningFile writes the current runtime status to the running file

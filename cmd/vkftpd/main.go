@@ -124,25 +124,16 @@ Configuration file must be in JSON format with the following structure:
 				return fmt.Errorf("failed to create status writer: %w", err)
 			}
 
-			// Set server as metrics provider
 			statusWriter.SetMetricsProvider(server)
 
-			// Write startup file
 			if err := statusWriter.WriteStartFile(); err != nil {
 				return fmt.Errorf("failed to write start file: %w", err)
 			}
 
-			// Start heartbeat
 			statusWriter.StartHeartbeat()
 
-			// Defer cleanup for graceful shutdown
-			defer func() {
-				statusWriter.Stop()
-				uptime := time.Since(server.GetStartTime())
-				if err := statusWriter.WriteStopFile("signal_SIGTERM", uptime); err != nil {
-					logging.App.Error("Failed to write stop file", "error", err)
-				}
-			}()
+			// Fallback for panics and unexpected exits
+			defer statusWriter.Shutdown("unexpected_exit")
 		}
 
 		logging.App.Info("Starting VikingMUD FTP Server", "version", version, "listen_addr", config.ListenAddr, "port", config.Port)
@@ -160,21 +151,24 @@ Configuration file must be in JSON format with the following structure:
 		// Wait for signal or server error
 		select {
 		case err := <-serverErr:
+			if statusWriter != nil {
+				reason := "server_stopped"
+				if err != nil {
+					reason = "server_error"
+				}
+				statusWriter.Shutdown(reason)
+			}
+
 			if err != nil {
 				logging.App.Error("Server error", "error", err)
 				return fmt.Errorf("server error: %w", err)
 			}
+
 		case sig := <-sigChan:
 			logging.App.Info("Received signal, shutting down gracefully", "signal", sig)
 
-			// Update stop file reason if we have status writer
 			if statusWriter != nil {
-				statusWriter.Stop()
-				reason := fmt.Sprintf("signal_%s", sig)
-				uptime := time.Since(server.GetStartTime())
-				if err := statusWriter.WriteStopFile(reason, uptime); err != nil {
-					logging.App.Error("Failed to write stop file", "error", err)
-				}
+				statusWriter.Shutdown(fmt.Sprintf("signal_%s", sig))
 			}
 
 			// Create a context with timeout for graceful shutdown

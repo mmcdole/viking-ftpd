@@ -308,3 +308,142 @@ func TestWithoutMetricsProvider(t *testing.T) {
 		t.Error("Expected uptime_seconds to be 0 without metrics provider")
 	}
 }
+
+func TestShutdown(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	w, err := New(tmpDir, 10*time.Second, "v1.0.0")
+	if err != nil {
+		t.Fatalf("Failed to create writer: %v", err)
+	}
+
+	// Set up mock metrics provider
+	mock := &mockMetricsProvider{
+		activeConnections: 5,
+		startTime:         time.Now().Add(-30 * time.Minute),
+	}
+	w.SetMetricsProvider(mock)
+
+	// Start heartbeat
+	w.StartHeartbeat()
+
+	// Wait for initial heartbeat
+	time.Sleep(50 * time.Millisecond)
+
+	// Call Shutdown
+	if err := w.Shutdown("signal_SIGTERM"); err != nil {
+		t.Fatalf("Shutdown failed: %v", err)
+	}
+
+	// Verify stop file was written
+	stopPath := filepath.Join(tmpDir, "last_stop")
+	content, err := os.ReadFile(stopPath)
+	if err != nil {
+		t.Fatalf("Failed to read stop file: %v", err)
+	}
+
+	contentStr := string(content)
+
+	// Check for required fields
+	if !strings.Contains(contentStr, "reason: signal_SIGTERM") {
+		t.Error("Stop file missing correct reason")
+	}
+
+	if !strings.Contains(contentStr, "uptime_seconds:") {
+		t.Error("Stop file missing uptime")
+	}
+
+	// Verify uptime is approximately 30 minutes (1800 seconds)
+	if !strings.Contains(contentStr, "uptime_seconds: 18") {
+		t.Error("Expected uptime to be around 1800 seconds")
+	}
+}
+
+func TestShutdownIdempotent(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	w, err := New(tmpDir, 10*time.Second, "v1.0.0")
+	if err != nil {
+		t.Fatalf("Failed to create writer: %v", err)
+	}
+
+	mock := &mockMetricsProvider{
+		activeConnections: 3,
+		startTime:         time.Now(),
+	}
+	w.SetMetricsProvider(mock)
+
+	w.StartHeartbeat()
+	time.Sleep(50 * time.Millisecond)
+
+	// Call Shutdown multiple times
+	if err := w.Shutdown("signal_SIGTERM"); err != nil {
+		t.Fatalf("First shutdown failed: %v", err)
+	}
+
+	if err := w.Shutdown("signal_SIGINT"); err != nil {
+		t.Fatalf("Second shutdown failed: %v", err)
+	}
+
+	if err := w.Shutdown("unexpected_exit"); err != nil {
+		t.Fatalf("Third shutdown failed: %v", err)
+	}
+
+	// Verify stop file was written only once with first reason
+	stopPath := filepath.Join(tmpDir, "last_stop")
+	content, err := os.ReadFile(stopPath)
+	if err != nil {
+		t.Fatalf("Failed to read stop file: %v", err)
+	}
+
+	contentStr := string(content)
+
+	// Should have the first reason, not the subsequent ones
+	if !strings.Contains(contentStr, "reason: signal_SIGTERM") {
+		t.Error("Stop file should have first reason (signal_SIGTERM)")
+	}
+
+	if strings.Contains(contentStr, "signal_SIGINT") {
+		t.Error("Stop file should not have been overwritten with signal_SIGINT")
+	}
+
+	if strings.Contains(contentStr, "unexpected_exit") {
+		t.Error("Stop file should not have been overwritten with unexpected_exit")
+	}
+}
+
+func TestShutdownWithoutMetricsProvider(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	w, err := New(tmpDir, 10*time.Second, "v1.0.0")
+	if err != nil {
+		t.Fatalf("Failed to create writer: %v", err)
+	}
+
+	// Don't set metrics provider
+	w.StartHeartbeat()
+	time.Sleep(50 * time.Millisecond)
+
+	// Should still work without metrics provider
+	if err := w.Shutdown("server_error"); err != nil {
+		t.Fatalf("Shutdown failed without metrics provider: %v", err)
+	}
+
+	// Verify stop file was written
+	stopPath := filepath.Join(tmpDir, "last_stop")
+	content, err := os.ReadFile(stopPath)
+	if err != nil {
+		t.Fatalf("Failed to read stop file: %v", err)
+	}
+
+	contentStr := string(content)
+
+	// Should have zero uptime
+	if !strings.Contains(contentStr, "uptime_seconds: 0") {
+		t.Error("Expected uptime to be 0 without metrics provider")
+	}
+
+	if !strings.Contains(contentStr, "reason: server_error") {
+		t.Error("Stop file missing correct reason")
+	}
+}
