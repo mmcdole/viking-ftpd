@@ -60,6 +60,21 @@ The server directly reads MUD data files:
 3. **Authorization**: File operation requested → path normalized → access tree traversed from root to target → permissions resolved with inheritance → operation allowed/denied
 4. **File Access**: All file operations are jailed within `ftp_root_dir`. User home directory follows `home_pattern` (e.g., `players/{username}`).
 
+### Status File Monitoring
+
+Optional health monitoring feature that writes status files for MUD integration:
+
+**Files created** (in `status_dir` if configured):
+- `last_start` - Written once at startup with timestamp, PID, and version
+- `running` - Updated every 10 seconds with live metrics (connections, memory, goroutines, uptime)
+- `last_stop` - Written on graceful shutdown with reason and uptime
+
+**Crash detection**: MUD can detect daemon crashes by checking if `running` is stale (>60s old) without corresponding `last_stop` update.
+
+**File format**: Simple `key: value` pairs for easy LPC parsing.
+
+**Signal handling**: Daemon responds to SIGTERM/SIGINT with graceful shutdown, writing `last_stop` with appropriate reason.
+
 ### Security Considerations
 
 - **Timing attack protection**: Authentication always performs hash verification even for non-existent users

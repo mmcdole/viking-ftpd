@@ -45,7 +45,8 @@ Create a configuration file in JSON format. Example:
     "access_cache_time": 60,
     "access_log_path": "/mud/lib/log/vkftpd-access.log",
     "app_log_path": "/mud/lib/log/vkftpd-app.log",
-    "log_level": "info"
+    "log_level": "info",
+    "status_dir": "/mud/lib/sys/ftp"
 }
 ```
 
@@ -76,6 +77,42 @@ If TLS certificate and key files are provided, the server will support both FTP 
 - `access_log_path`: Path to access log file (optional)
 - `app_log_path`: Path to application log file (optional)
 - `log_level`: Log level (debug, info, warn, error, panic) (default: info)
+
+### Status Monitoring
+- `status_dir`: Directory for status files (optional). When configured, the daemon writes health monitoring files that the MUD can read to track daemon status.
+
+#### Status Files
+
+When `status_dir` is configured, the daemon creates three files for monitoring:
+
+**`last_start`** - Written once at startup:
+```
+timestamp_unix: 1727888400
+timestamp_human: Thu Oct 02 12:00:00 2025
+pid: 29481
+version: v1.0.10
+```
+
+**`running`** - Updated every 10 seconds with live metrics:
+```
+timestamp_unix: 1727889305
+uptime_seconds: 905
+active_connections: 12
+memory_alloc_mb: 45
+memory_sys_mb: 72
+goroutines: 23
+gc_cpu_fraction: 0.0011
+```
+
+**`last_stop`** - Written only on graceful shutdown:
+```
+timestamp_unix: 1727892000
+timestamp_human: Thu Oct 02 12:40:00 2025
+reason: signal_SIGTERM
+uptime_seconds: 3600
+```
+
+The MUD can monitor daemon health by checking if `running` is recent (timestamp < 60 seconds old). If the daemon crashes, `last_stop` won't be updated, allowing crash detection.
 
 ## Package Overview
 
