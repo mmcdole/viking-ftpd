@@ -1,14 +1,19 @@
 package main
 
 import (
+	"context"
 	"fmt"
+	"os"
+	"os/signal"
 	"path/filepath"
+	"syscall"
 	"time"
 
 	"github.com/mmcdole/viking-ftpd/pkg/authentication"
 	"github.com/mmcdole/viking-ftpd/pkg/authorization"
 	"github.com/mmcdole/viking-ftpd/pkg/ftpserver"
 	"github.com/mmcdole/viking-ftpd/pkg/logging"
+	"github.com/mmcdole/viking-ftpd/pkg/status"
 	"github.com/mmcdole/viking-ftpd/pkg/users"
 	"github.com/spf13/cobra"
 )
@@ -111,8 +116,81 @@ Configuration file must be in JSON format with the following structure:
 			return fmt.Errorf("failed to create FTP server: %w", err)
 		}
 
+		// Initialize status writer if configured
+		var statusWriter *status.Writer
+		if config.StatusDir != "" {
+			statusWriter, err = status.New(config.StatusDir, 10*time.Second, version)
+			if err != nil {
+				return fmt.Errorf("failed to create status writer: %w", err)
+			}
+
+			statusWriter.SetMetricsProvider(server)
+
+			if err := statusWriter.WriteStartFile(); err != nil {
+				return fmt.Errorf("failed to write start file: %w", err)
+			}
+
+			statusWriter.StartHeartbeat()
+
+			// Fallback for panics and unexpected exits
+			defer statusWriter.Shutdown("unexpected_exit")
+		}
+
 		logging.App.Info("Starting VikingMUD FTP Server", "version", version, "listen_addr", config.ListenAddr, "port", config.Port)
-		return server.ListenAndServe()
+
+		// Set up signal handling for graceful shutdown
+		sigChan := make(chan os.Signal, 1)
+		signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+
+		// Start server in goroutine
+		serverErr := make(chan error, 1)
+		go func() {
+			serverErr <- server.ListenAndServe()
+		}()
+
+		// Wait for signal or server error
+		select {
+		case err := <-serverErr:
+			if statusWriter != nil {
+				reason := "server_stopped"
+				if err != nil {
+					reason = "server_error"
+				}
+				statusWriter.Shutdown(reason)
+			}
+
+			if err != nil {
+				logging.App.Error("Server error", "error", err)
+				return fmt.Errorf("server error: %w", err)
+			}
+
+		case sig := <-sigChan:
+			logging.App.Info("Received signal, shutting down gracefully", "signal", sig)
+
+			if statusWriter != nil {
+				statusWriter.Shutdown(fmt.Sprintf("signal_%s", sig))
+			}
+
+			// Create a context with timeout for graceful shutdown
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+
+			// Stop accepting new connections and wait for existing ones
+			if err := server.Stop(); err != nil {
+				logging.App.Error("Error stopping server", "error", err)
+				return fmt.Errorf("error stopping server: %w", err)
+			}
+
+			// Wait a bit for connections to clean up
+			select {
+			case <-ctx.Done():
+				logging.App.Warn("Shutdown timeout exceeded, forcing exit")
+			case <-time.After(2 * time.Second):
+				logging.App.Info("Graceful shutdown complete")
+			}
+		}
+
+		return nil
 	},
 }
 

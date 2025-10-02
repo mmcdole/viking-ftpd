@@ -45,7 +45,8 @@ Create a configuration file in JSON format. Example:
     "access_cache_time": 60,
     "access_log_path": "/mud/lib/log/vkftpd-access.log",
     "app_log_path": "/mud/lib/log/vkftpd-app.log",
-    "log_level": "info"
+    "log_level": "info",
+    "status_dir": "/mud/lib/sys/ftp"
 }
 ```
 
@@ -76,6 +77,9 @@ If TLS certificate and key files are provided, the server will support both FTP 
 - `access_log_path`: Path to access log file (optional)
 - `app_log_path`: Path to application log file (optional)
 - `log_level`: Log level (debug, info, warn, error, panic) (default: info)
+
+### Status Monitoring
+- `status_dir`: Directory for status files (optional). When configured, writes three monitoring files: `last_start` (startup info), `running` (live metrics updated every 10s), and `last_stop` (shutdown reason). The MUD can detect crashes by checking if `running` is stale (>60s old) without a corresponding `last_stop` update.
 
 ## Package Overview
 

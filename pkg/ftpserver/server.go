@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"sync/atomic"
 	"time"
 
 	ftpserverlib "github.com/fclairamb/ftpserverlib"
@@ -31,11 +32,13 @@ type Config struct {
 
 // Server wraps the FTP server with our custom auth
 type Server struct {
-	config        *Config
-	authenticator *authentication.Authenticator
-	authorizer    *authorization.Authorizer
-	server        *ftpserverlib.FtpServer
-	version       string
+	config            *Config
+	authenticator     *authentication.Authenticator
+	authorizer        *authorization.Authorizer
+	server            *ftpserverlib.FtpServer
+	version           string
+	activeConnections atomic.Int32
+	startTime         time.Time
 }
 
 // New creates a new FTP server
@@ -50,6 +53,7 @@ func New(config *Config, authorizer *authorization.Authorizer, authenticator *au
 		authorizer:    authorizer,
 		authenticator: authenticator,
 		version:       version,
+		startTime:     time.Now(),
 	}
 
 	driver := &ftpDriver{server: s}
@@ -69,6 +73,16 @@ func (s *Server) ListenAndServe() error {
 // Stop stops the server
 func (s *Server) Stop() error {
 	return s.server.Stop()
+}
+
+// GetActiveConnections returns the current number of active connections
+func (s *Server) GetActiveConnections() int32 {
+	return s.activeConnections.Load()
+}
+
+// GetStartTime returns the server start time
+func (s *Server) GetStartTime() time.Time {
+	return s.startTime
 }
 
 // ftpDriver implements ftpserverlib.MainDriver
@@ -107,6 +121,9 @@ func (d *ftpDriver) GetSettings() (*ftpserverlib.Settings, error) {
 // ClientConnected is called when a client connects
 // Interface: ftpserverlib.MainDriver
 func (d *ftpDriver) ClientConnected(cc ftpserverlib.ClientContext) (string, error) {
+	// Increment active connection counter
+	d.server.activeConnections.Add(1)
+
 	// Enable debug logging if log level is debug
 	if logging.App.IsDebug() {
 		cc.SetDebug(true)
@@ -118,6 +135,9 @@ func (d *ftpDriver) ClientConnected(cc ftpserverlib.ClientContext) (string, erro
 // ClientDisconnected is called when a client disconnects
 // Interface: ftpserverlib.MainDriver
 func (d *ftpDriver) ClientDisconnected(cc ftpserverlib.ClientContext) {
+	// Decrement active connection counter
+	d.server.activeConnections.Add(-1)
+
 	logging.Access.LogAccess("disconnect", "", cc.RemoteAddr().String(), "success")
 }
 

@@ -38,6 +38,9 @@ type Config struct {
 	AccessLogPath string `json:"access_log_path"` // Path to access log file
 	AppLogPath    string `json:"app_log_path"`    // Path to application log file
 	LogLevel      string `json:"log_level"`       // Log level (debug, info, warn, error, panic)
+
+	// Status monitoring (optional)
+	StatusDir string `json:"status_dir"` // Directory for status files (last_start, running, last_stop)
 }
 
 // LoadConfig loads configuration from a JSON file
@@ -69,6 +72,11 @@ func LoadConfig(path string, config *Config) error {
 	}
 	if config.AppLogPath != "" && !filepath.IsAbs(config.AppLogPath) {
 		config.AppLogPath = filepath.Join(configDir, config.AppLogPath)
+	}
+
+	// Convert status directory to absolute if specified and not absolute
+	if config.StatusDir != "" && !filepath.IsAbs(config.StatusDir) {
+		config.StatusDir = filepath.Join(configDir, config.StatusDir)
 	}
 
 	// Convert TLS paths to absolute if specified and not absolute
