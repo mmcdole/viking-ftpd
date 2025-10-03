@@ -14,6 +14,7 @@ import (
 // MetricsProvider defines the interface for collecting runtime metrics
 type MetricsProvider interface {
 	GetActiveConnections() int32
+	GetTotalConnections() int64
 	GetStartTime() time.Time
 }
 
@@ -165,10 +166,12 @@ func (w *Writer) writeRunningFile() error {
 
 	var startTime time.Time
 	var activeConnections int32
+	var totalConnections int64
 
 	if w.metricsProvider != nil {
 		startTime = w.metricsProvider.GetStartTime()
 		activeConnections = w.metricsProvider.GetActiveConnections()
+		totalConnections = w.metricsProvider.GetTotalConnections()
 	}
 
 	uptime := int64(0)
@@ -183,6 +186,7 @@ func (w *Writer) writeRunningFile() error {
 	content := fmt.Sprintf(`timestamp_unix: %d
 uptime_seconds: %d
 active_connections: %d
+total_connections: %d
 memory_alloc_mb: %d
 memory_sys_mb: %d
 goroutines: %d
@@ -191,6 +195,7 @@ gc_cpu_fraction: %.6f
 		now.Unix(),
 		uptime,
 		activeConnections,
+		totalConnections,
 		memStats.Alloc/1024/1024,
 		memStats.Sys/1024/1024,
 		runtime.NumGoroutine(),

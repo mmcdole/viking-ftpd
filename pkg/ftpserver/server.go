@@ -38,6 +38,7 @@ type Server struct {
 	server            *ftpserverlib.FtpServer
 	version           string
 	activeConnections atomic.Int32
+	totalConnections  atomic.Int64
 	startTime         time.Time
 }
 
@@ -78,6 +79,11 @@ func (s *Server) Stop() error {
 // GetActiveConnections returns the current number of active connections
 func (s *Server) GetActiveConnections() int32 {
 	return s.activeConnections.Load()
+}
+
+// GetTotalConnections returns the total number of connections since server start
+func (s *Server) GetTotalConnections() int64 {
+	return s.totalConnections.Load()
 }
 
 // GetStartTime returns the server start time
@@ -123,6 +129,8 @@ func (d *ftpDriver) GetSettings() (*ftpserverlib.Settings, error) {
 func (d *ftpDriver) ClientConnected(cc ftpserverlib.ClientContext) (string, error) {
 	// Increment active connection counter
 	d.server.activeConnections.Add(1)
+	// Increment total connection counter
+	d.server.totalConnections.Add(1)
 
 	// Enable debug logging if log level is debug
 	if logging.App.IsDebug() {

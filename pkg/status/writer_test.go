@@ -11,11 +11,16 @@ import (
 // mockMetricsProvider implements MetricsProvider for testing
 type mockMetricsProvider struct {
 	activeConnections int32
+	totalConnections  int64
 	startTime         time.Time
 }
 
 func (m *mockMetricsProvider) GetActiveConnections() int32 {
 	return m.activeConnections
+}
+
+func (m *mockMetricsProvider) GetTotalConnections() int64 {
+	return m.totalConnections
 }
 
 func (m *mockMetricsProvider) GetStartTime() time.Time {
@@ -142,6 +147,7 @@ func TestWriteRunningFile(t *testing.T) {
 	// Set up mock metrics provider
 	mock := &mockMetricsProvider{
 		activeConnections: 5,
+		totalConnections:  42,
 		startTime:         time.Now().Add(-1 * time.Hour),
 	}
 	w.SetMetricsProvider(mock)
@@ -164,6 +170,7 @@ func TestWriteRunningFile(t *testing.T) {
 		"timestamp_unix:",
 		"uptime_seconds:",
 		"active_connections: 5",
+		"total_connections: 42",
 		"memory_alloc_mb:",
 		"memory_sys_mb:",
 		"goroutines:",
@@ -302,6 +309,10 @@ func TestWithoutMetricsProvider(t *testing.T) {
 	// Should have zero values for connection count and uptime
 	if !strings.Contains(contentStr, "active_connections: 0") {
 		t.Error("Expected active_connections to be 0 without metrics provider")
+	}
+
+	if !strings.Contains(contentStr, "total_connections: 0") {
+		t.Error("Expected total_connections to be 0 without metrics provider")
 	}
 
 	if !strings.Contains(contentStr, "uptime_seconds: 0") {
