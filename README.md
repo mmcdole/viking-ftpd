@@ -46,6 +46,8 @@ Create a configuration file in JSON format. Example:
     "access_log_path": "/mud/lib/log/vkftpd-access.log",
     "app_log_path": "/mud/lib/log/vkftpd-app.log",
     "log_level": "info",
+    "max_log_size": 1000000,
+    "log_verify_interval": 45,
     "status_dir": "/mud/lib/sys/ftp"
 }
 ```
@@ -77,6 +79,10 @@ If TLS certificate and key files are provided, the server will support both FTP 
 - `access_log_path`: Path to access log file (optional)
 - `app_log_path`: Path to application log file (optional)
 - `log_level`: Log level (debug, info, warn, error, panic) (default: info)
+- `max_log_size`: Maximum log file size in bytes before rotation (default: 1000000 / 1MB)
+- `log_verify_interval`: Seconds between file verification checks to detect external moves (default: 45)
+
+When logs exceed `max_log_size`, they are automatically rotated to timestamped archives in an `old/` subdirectory with format `<basename>.YYYYMMDD-HHMMSS`. The daemon also periodically verifies log files exist and recreates them if externally moved or deleted.
 
 ### Status Monitoring
 - `status_dir`: Directory for status files (optional). When configured, writes three monitoring files: `last_start` (startup info), `running` (live metrics updated every 10s), and `last_stop` (shutdown reason). The MUD can detect crashes by checking if `running` is stale (>60s old) without a corresponding `last_stop` update.
