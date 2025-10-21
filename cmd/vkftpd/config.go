@@ -35,9 +35,11 @@ type Config struct {
 	AccessCacheTime    int `json:"access_cache_time"`    // How long to cache access data (seconds)
 
 	// Logging settings
-	AccessLogPath string `json:"access_log_path"` // Path to access log file
-	AppLogPath    string `json:"app_log_path"`    // Path to application log file
-	LogLevel      string `json:"log_level"`       // Log level (debug, info, warn, error, panic)
+	AccessLogPath     string `json:"access_log_path"`      // Path to access log file
+	AppLogPath        string `json:"app_log_path"`         // Path to application log file
+	LogLevel          string `json:"log_level"`            // Log level (debug, info, warn, error, panic)
+	MaxLogSize        int    `json:"max_log_size"`         // Maximum log size in bytes before rotation
+	LogVerifyInterval int    `json:"log_verify_interval"`  // Seconds between file verification checks
 
 	// Status monitoring (optional)
 	StatusDir string `json:"status_dir"` // Directory for status files (last_start, running, last_stop)
@@ -108,6 +110,12 @@ func LoadConfig(path string, config *Config) error {
 	}
 	if config.AccessCacheTime == 0 {
 		config.AccessCacheTime = 60 // 1 minute
+	}
+	if config.MaxLogSize == 0 {
+		config.MaxLogSize = 1000000 // 1 MB, matching MUD's MAX_LOG_SIZE
+	}
+	if config.LogVerifyInterval == 0 {
+		config.LogVerifyInterval = 45 // 45 seconds
 	}
 
 	return nil

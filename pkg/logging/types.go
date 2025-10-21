@@ -3,6 +3,7 @@ package logging
 import (
 	"fmt"
 	"strings"
+	"time"
 )
 
 // LogLevel represents the severity of a log message
@@ -32,20 +33,20 @@ func init() {
 	// Initialize default loggers that write to io.Discard
 	var err error
 
-	// Create no-op loggers by default
-	App, err = NewAppLogger("", LogLevelInfo)
+	// Create no-op loggers by default (rotation params don't matter for empty path)
+	App, err = NewAppLogger("", LogLevelInfo, 1000000, 45*time.Second)
 	if err != nil {
 		panic(fmt.Sprintf("failed to initialize default app logger: %v", err))
 	}
 
-	Access, err = NewAccessLogger("")
+	Access, err = NewAccessLogger("", 1000000, 45*time.Second)
 	if err != nil {
 		panic(fmt.Sprintf("failed to initialize default access logger: %v", err))
 	}
 }
 
 // Initialize sets up the global loggers
-func Initialize(accessLogPath, appLogPath string, level LogLevel) error {
+func Initialize(accessLogPath, appLogPath string, level LogLevel, maxSize int64, verifyInterval time.Duration) error {
 	var err error
 
 	// Set default level if not specified
@@ -54,15 +55,23 @@ func Initialize(accessLogPath, appLogPath string, level LogLevel) error {
 	}
 
 	// Initialize access logger
-	newAccess, err := NewAccessLogger(accessLogPath)
+	newAccess, err := NewAccessLogger(accessLogPath, maxSize, verifyInterval)
 	if err != nil {
 		return fmt.Errorf("failed to initialize access logger: %w", err)
 	}
 
 	// Initialize application logger
-	newApp, err := NewAppLogger(appLogPath, level)
+	newApp, err := NewAppLogger(appLogPath, level, maxSize, verifyInterval)
 	if err != nil {
 		return fmt.Errorf("failed to initialize app logger: %w", err)
+	}
+
+	// Close old loggers if they exist
+	if Access != nil {
+		_ = Access.Close()
+	}
+	if App != nil {
+		_ = App.Close()
 	}
 
 	// Update global loggers
@@ -73,9 +82,19 @@ func Initialize(accessLogPath, appLogPath string, level LogLevel) error {
 }
 
 // MustInitialize initializes logging and panics on error
-func MustInitialize(accessLogPath, appLogPath string, level LogLevel) {
-	if err := Initialize(accessLogPath, appLogPath, level); err != nil {
+func MustInitialize(accessLogPath, appLogPath string, level LogLevel, maxSize int64, verifyInterval time.Duration) {
+	if err := Initialize(accessLogPath, appLogPath, level, maxSize, verifyInterval); err != nil {
 		panic(fmt.Sprintf("failed to initialize logging: %v", err))
+	}
+}
+
+// Shutdown closes all loggers and stops background rotation
+func Shutdown() {
+	if Access != nil {
+		_ = Access.Close()
+	}
+	if App != nil {
+		_ = App.Close()
 	}
 }
 

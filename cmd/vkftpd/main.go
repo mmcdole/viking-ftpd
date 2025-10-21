@@ -85,9 +85,16 @@ Configuration file must be in JSON format with the following structure:
 		}
 
 		// Initialize logging
-		if err := logging.Initialize(config.AccessLogPath, config.AppLogPath, logging.LogLevel(config.LogLevel)); err != nil {
+		if err := logging.Initialize(
+			config.AccessLogPath,
+			config.AppLogPath,
+			logging.LogLevel(config.LogLevel),
+			int64(config.MaxLogSize),
+			time.Duration(config.LogVerifyInterval)*time.Second,
+		); err != nil {
 			return fmt.Errorf("failed to initialize logging: %w", err)
 		}
+		defer logging.Shutdown()
 
 		// Create user source
 		charSource := users.NewFileSource(config.CharacterDirPath)
