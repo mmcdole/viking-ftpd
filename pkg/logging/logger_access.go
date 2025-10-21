@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"os"
 	"strings"
 	"time"
 )
@@ -15,28 +14,34 @@ type AccessLogger interface {
 	LogAccess(operation string, user string, path string, status string, details ...interface{})
 	// LogAuth logs authentication operations
 	LogAuth(operation string, user string, status string, details ...interface{})
+	// Close closes the logger and stops background rotation
+	Close() error
 }
 
 type accessLogger struct {
 	logger *log.Logger
+	writer *RotatingWriter // nil if logging to io.Discard
 }
 
 // NewAccessLogger creates a new access logger
-func NewAccessLogger(logPath string) (AccessLogger, error) {
+func NewAccessLogger(logPath string, maxSize int64, verifyInterval time.Duration) (AccessLogger, error) {
 	var writer io.Writer
+	var rotatingWriter *RotatingWriter
 
 	if logPath == "" {
 		writer = io.Discard
 	} else {
-		f, err := os.OpenFile(logPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+		rw, err := NewRotatingWriter(logPath, maxSize, verifyInterval)
 		if err != nil {
-			return nil, fmt.Errorf("opening access log file: %w", err)
+			return nil, fmt.Errorf("creating rotating writer: %w", err)
 		}
-		writer = f
+		writer = rw
+		rotatingWriter = rw
 	}
 
 	return &accessLogger{
 		logger: log.New(writer, "", 0), // No flags, we'll handle formatting ourselves
+		writer: rotatingWriter,
 	}, nil
 }
 
@@ -77,4 +82,12 @@ func (l *accessLogger) LogAuth(operation string, user string, status string, det
 
 	timestamp := time.Now().UTC().Format("2006-01-02 15:04:05 -0700")
 	l.logger.Printf("%s %s", timestamp, strings.Join(parts, " "))
+}
+
+// Close closes the logger and stops background rotation
+func (l *accessLogger) Close() error {
+	if l.writer != nil {
+		return l.writer.Close()
+	}
+	return nil
 }

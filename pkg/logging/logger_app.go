@@ -15,22 +15,27 @@ import (
 type AppLogger struct {
 	level  LogLevel
 	logger *log.Logger
+	writer *RotatingWriter // nil if logging to stdout
 }
 
 // NewAppLogger creates a new application logger
-func NewAppLogger(logPath string, level LogLevel) (*AppLogger, error) {
+func NewAppLogger(logPath string, level LogLevel, maxSize int64, verifyInterval time.Duration) (*AppLogger, error) {
 	var writer io.Writer = os.Stdout
+	var rotatingWriter *RotatingWriter
+
 	if logPath != "" {
-		f, err := os.OpenFile(logPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+		rw, err := NewRotatingWriter(logPath, maxSize, verifyInterval)
 		if err != nil {
-			return nil, fmt.Errorf("opening app log file: %w", err)
+			return nil, fmt.Errorf("creating rotating writer: %w", err)
 		}
-		writer = f
+		writer = rw
+		rotatingWriter = rw
 	}
 
 	return &AppLogger{
 		level:  level,
 		logger: log.New(writer, "", 0), // No flags, we'll handle formatting ourselves
+		writer: rotatingWriter,
 	}, nil
 }
 
@@ -115,4 +120,12 @@ func (l *AppLogger) With(keyvals ...interface{}) golog.Logger {
 // IsDebug returns true if the logger is at debug level
 func (l *AppLogger) IsDebug() bool {
 	return l.level == LogLevelDebug
+}
+
+// Close closes the logger and stops background rotation
+func (l *AppLogger) Close() error {
+	if l.writer != nil {
+		return l.writer.Close()
+	}
+	return nil
 }
